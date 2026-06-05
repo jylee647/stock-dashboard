@@ -32,8 +32,8 @@ _BENCH_NAME = {"KR": "코스피", "US": "S&P 500"}
 _HOLD_LABEL = {5: "1주", 20: "1달", 60: "3달"}
 
 # 목표/손절 배수 (변동성 밴드 기준) — 보상:위험 비대칭으로 기대수익 양수 유도
-_TP_MULT = 1.0   # 목표가 = entry * (1 + 1.0 * band)  [v6: 더 앞당긴 이익실현]
-_SL_MULT = 1.2   # 손절가 = entry * (1 - 1.2 * band)  [손익분기 승률 ~54.5%]
+_TP_MULT = 0.9   # 목표가 = entry * (1 + 0.9 * band)  [v7]
+_SL_MULT = 1.2   # 손절가 = entry * (1 - 1.2 * band)  [손익분기 승률 ~57%]
 
 
 def _universe(market: str) -> Dict[str, str]:
@@ -185,7 +185,7 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             continue
         # 점수 하한(품질 바닥): 약한 구간에선 종목 수를 줄여 평균 품질을 높임 → 적중률↑
         ranked = sorted(cand, key=cand.get, reverse=True)
-        picks = [s for s in ranked if cand[s] >= 0.10][:top]
+        picks = [s for s in ranked if cand[s] >= 0.13][:top]
         if not picks:
             skipped_nopick += 1
             continue
