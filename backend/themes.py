@@ -23,7 +23,7 @@ def get_themes() -> dict:
     if _CACHE["data"] and time.time() - _CACHE["t"] < 600:
         return _CACHE["data"]
 
-    url = os.getenv("THEMES_URL", "").strip()
+    url = os.getenv("THEMES_URL", "").strip() or "https://raw.githubusercontent.com/jylee647/stock-dashboard/main/themes.json"
     data = None
     if url:
         try:
