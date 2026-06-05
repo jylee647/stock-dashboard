@@ -1,14 +1,20 @@
 """
-관련주 영향·방향 엔진 (테마 단위)
-- 같은 테마(#반도체, #2차전지 ...) 안에서 '리더'가 움직이면 '팔로워'가 며칠 뒤 어느 방향으로
-  따라가는지를 시차 상관(lead-lag cross-correlation)으로 계산한다.
-- 출력: 테마별 리더 + 팔로워(최적 시차·상관·방향) + 현재 방향 신호.
-※ 테마 구성종목을 '명시적 큐레이션 맵'으로 관리한다(종목명 키워드 매칭이 아니라).
-  → 폴백 유니버스가 작아도 의미 있는 테마 그룹이 항상 만들어진다.
+관련주 영향·방향 엔진 (테마 단위) — v2 (신뢰도 강화)
+핵심 아이디어
+- 같은 테마 안에서 '누가 테마를 끌고 가는가(리더)'를 먼저 찾고, 그 리더가 며칠 뒤
+  팔로워를 어느 방향으로 움직였는지를 시차 상관(lead-lag)으로 본다.
+개선점 (v1 → v2)
+ 1) 분할·이상치 필터: 한국 일일 등락 한계(±30%)를 넘는 수익률은 분할/조정 아티팩트로
+    보고 제거 → 리더 선정·상관이 가짜 점프에 오염되지 않게 함.
+ 2) 유의성 검정: 각 시차 상관에 표본수 n과 양측 p값을 붙이고, 통계적으로 유의한(p<0.05)
+    관계만 신호로 채택. 약한 우연 상관을 걸러낸다.
+ 3) 리더 = 영향력 중심성: '최근 모멘텀 1위'가 아니라 '테마 안에서 다른 종목을 가장 많이
+    선행 설명하는 종목'(유의한 |corr| 합이 최대)을 리더로 선정.
 ※ 가격 데이터 기반의 통계적 관계이며, 인과나 미래 수익을 보장하지 않는다.
 """
 from __future__ import annotations
 
+import math
 import time
 from typing import Dict, List, Tuple
 
@@ -17,9 +23,12 @@ import pandas as pd
 import yfinance as yf
 
 _CACHE: Dict[str, tuple] = {}
-_MAX_LAG = 5          # 며칠 뒤까지 따라가는지 (1~5거래일)
-_MIN_MEMBERS = 3      # 테마 최소 구성 종목
-_MIN_ABS_CORR = 0.15  # 의미 있는 상관 하한
+_MAX_LAG = 5            # 며칠 뒤까지 따라가는지 (1~5거래일)
+_MIN_MEMBERS = 3        # 테마 최소 구성 종목
+_MIN_ABS_CORR = 0.15   # 의미 있는 상관 하한(2차 필터)
+_ALPHA = 0.05          # 유의수준 (p값 임계)
+_DAILY_CAP = 0.35      # 일일 수익률 이상치 컷(±35% 초과는 분할/조정으로 간주)
+_MIN_OVERLAP = 40      # 시차상관 계산 최소 공통표본
 
 # ---------------------------------------------------------------------------
 # 명시적 테마 구성종목 맵 — (야후심볼, 표시이름)
@@ -124,15 +133,29 @@ _US_THEMES: Dict[str, List[Tuple[str, str]]] = {
     ],
 }
 
+# 일일 등락 한계: 미국은 한계 없음 → 더 느슨하게
+_US_DAILY_CAP = 0.60
+
 
 def _theme_map(market: str) -> Dict[str, List[Tuple[str, str]]]:
     return _US_THEMES if market == "US" else _KR_THEMES
 
 
-def _lead_lag(leader: pd.Series, follower: pd.Series) -> tuple:
+def _pvalue_corr(r: float, n: int) -> float:
+    """상관계수 r, 표본 n의 양측 p값(정규근사). n이 충분히 크면 t≈z."""
+    if n < 5 or not np.isfinite(r):
+        return 1.0
+    r = max(min(r, 0.999999), -0.999999)
+    t = r * math.sqrt((n - 2) / (1 - r * r))
+    # 양측 p ≈ erfc(|t|/sqrt(2))  (n>=40 정규근사 충분)
+    return math.erfc(abs(t) / math.sqrt(2.0))
+
+
+def _lead_lag(leader: pd.Series, follower: pd.Series) -> Tuple[int, float, int, float]:
     """leader 수익률이 follower 수익률을 며칠 선행하는지.
-    반환: (best_lag, corr) — corr 부호가 +면 동행, -면 역행."""
-    best_lag, best_corr = 0, 0.0
+    반환: (best_lag, corr, n, pvalue). corr 부호 +면 동행, -면 역행.
+    유의성(p)이 가장 낮은(=가장 강한) 시차를 선택."""
+    best = (0, 0.0, 0, 1.0)
     for lag in range(1, _MAX_LAG + 1):
         a = leader.iloc[:-lag]
         b = follower.iloc[lag:]
@@ -144,19 +167,38 @@ def _lead_lag(leader: pd.Series, follower: pd.Series) -> tuple:
         if np.std(a) == 0 or np.std(b) == 0:
             continue
         c = float(np.corrcoef(a, b)[0, 1])
-        if np.isfinite(c) and abs(c) > abs(best_corr):
-            best_lag, best_corr = lag, c
-    return best_lag, best_corr
+        if not np.isfinite(c):
+            continue
+        p = _pvalue_corr(c, n)
+        if p < best[3]:
+            best = (lag, c, n, p)
+    return best
+
+
+def _clean_returns(closeDF: pd.DataFrame, cap: float) -> pd.DataFrame:
+    """일일 수익률에서 ±cap 초과(분할/조정 아티팩트)를 NaN 처리."""
+    r = closeDF.pct_change()
+    r = r.mask(r.abs() > cap)
+    return r
+
+
+def _clean_momentum(ret: pd.Series, win: int = 60) -> float:
+    """이상치 제거된 일일수익률의 최근 win일 누적수익(분할 점프 영향 배제)."""
+    tail = ret.dropna().iloc[-win:]
+    if len(tail) < max(20, win // 3):
+        return float("nan")
+    return float((1.0 + tail).prod() - 1.0)
 
 
 def compute(market: str) -> Dict:
     market = market.upper()
-    ck = f"infl2:{market}"
+    ck = f"infl3:{market}"
     c = _CACHE.get(ck)
     if c and time.time() - c[0] < 900:
         return c[1]
 
     tmap = _theme_map(market)
+    cap = _US_DAILY_CAP if market == "US" else _DAILY_CAP
     name_of: Dict[str, str] = {}
     for members in tmap.values():
         for sym, nm in members:
@@ -182,61 +224,97 @@ def compute(market: str) -> Dict:
         return {"error": "유효 종목 데이터 부족(네트워크 확인)"}
 
     closeDF = pd.DataFrame(close).sort_index()
-    retDF = closeDF.pct_change()
-    ret60 = closeDF.pct_change(60)
-    ret5 = closeDF.pct_change(5)
+    retDF = _clean_returns(closeDF, cap)           # 이상치 제거된 일일수익률
+    ret5 = {s: _clean_momentum(retDF[s], 5) for s in retDF.columns}
+
+    skipped_outliers = int(retDF.isna().sum().sum() - closeDF.isna().sum().sum())
 
     themes_out = []
     for theme, members in tmap.items():
         msyms = [s for s, _ in members if s in retDF.columns]
         if len(msyms) < _MIN_MEMBERS:
             continue
-        scored = [(m, ret60[m].iloc[-1]) for m in msyms if np.isfinite(ret60[m].iloc[-1])]
-        if len(scored) < _MIN_MEMBERS:
+        series = {s: retDF[s].dropna() for s in msyms}
+        msyms = [s for s in msyms if len(series[s]) >= _MIN_OVERLAP]
+        if len(msyms) < _MIN_MEMBERS:
             continue
-        scored.sort(key=lambda x: x[1], reverse=True)
-        leader_sym = scored[0][0]
-        leader_ret = retDF[leader_sym].dropna()
-        leader_move5 = float(ret5[leader_sym].iloc[-1]) if np.isfinite(ret5[leader_sym].iloc[-1]) else 0.0
+
+        # 모든 순서쌍 (i 리더 → j 팔로워) 시차상관 사전계산
+        pair: Dict[Tuple[str, str], Tuple[int, float, int, float]] = {}
+        for i in msyms:
+            for j in msyms:
+                if i == j:
+                    continue
+                idx = series[i].index.intersection(series[j].index)
+                if len(idx) < _MIN_OVERLAP:
+                    continue
+                pair[(i, j)] = _lead_lag(series[i].reindex(idx), series[j].reindex(idx))
+
+        # 영향력 중심성: i가 리더일 때 '유의하고 의미있는' |corr| 합
+        infl: Dict[str, float] = {s: 0.0 for s in msyms}
+        for (i, j), (lag, corr, n, p) in pair.items():
+            if lag > 0 and p < _ALPHA and abs(corr) >= _MIN_ABS_CORR:
+                infl[i] += abs(corr)
+        leader_sym = max(infl, key=lambda s: infl[s])
+        if infl[leader_sym] <= 0:
+            continue  # 테마 내 유의한 선행관계 없음 → 신호 없음
+
+        leader_mom = _clean_momentum(retDF[leader_sym], 60)
+        leader_move5 = ret5.get(leader_sym, float("nan"))
+        leader_move5 = 0.0 if not np.isfinite(leader_move5) else leader_move5
 
         followers = []
-        for f, _ in scored[1:]:
-            fr = retDF[f].dropna()
-            idx = leader_ret.index.intersection(fr.index)
-            if len(idx) < 40:
+        for j in msyms:
+            if j == leader_sym:
                 continue
-            lag, corr = _lead_lag(leader_ret.reindex(idx), fr.reindex(idx))
-            if lag == 0 or abs(corr) < _MIN_ABS_CORR:
+            v = pair.get((leader_sym, j))
+            if not v:
+                continue
+            lag, corr, n, p = v
+            if lag == 0 or p >= _ALPHA or abs(corr) < _MIN_ABS_CORR:
                 continue
             direction = "동행" if corr > 0 else "역행"
             bias = leader_move5 * corr
             signal = "상승 기대" if bias > 0 else ("하락 주의" if bias < 0 else "중립")
             followers.append({
-                "symbol": f, "name": name_of.get(f, f),
+                "symbol": j, "name": name_of.get(j, j),
                 "lag": lag, "corr": round(corr, 2),
+                "n": n, "pValue": round(p, 3),
                 "direction": direction, "signal": signal,
             })
         if not followers:
             continue
-        followers.sort(key=lambda x: abs(x["corr"]), reverse=True)
+        followers.sort(key=lambda x: x["pValue"])
         themes_out.append({
             "theme": theme,
             "members": len(msyms),
-            "leader": {"symbol": leader_sym, "name": name_of.get(leader_sym, leader_sym),
-                       "ret60Pct": round(scored[0][1] * 100, 1),
-                       "move5Pct": round(leader_move5 * 100, 2)},
+            "leader": {
+                "symbol": leader_sym, "name": name_of.get(leader_sym, leader_sym),
+                "influence": round(infl[leader_sym], 2),
+                "mom60Pct": (round(leader_mom * 100, 1) if np.isfinite(leader_mom) else None),
+                "move5Pct": round(leader_move5 * 100, 2),
+            },
             "followers": followers[:8],
         })
 
-    themes_out.sort(key=lambda t: t["members"], reverse=True)
+    # 유의한 팔로워가 많은 테마 우선
+    themes_out.sort(key=lambda t: len(t["followers"]), reverse=True)
     out = {
         "market": market,
         "themes": themes_out,
         "asOf": str(closeDF.index[-1].date()) if len(closeDF) else None,
+        "method": {
+            "leader": "테마 내 영향력 중심성(유의 |corr| 합 최대)",
+            "significance": f"양측 p<{_ALPHA}, |corr|>={_MIN_ABS_CORR}",
+            "outlierFilter": f"일일 ±{int(cap*100)}% 초과 제거",
+            "skippedOutlierDays": skipped_outliers,
+            "window": "8개월 일봉, 시차 1~5거래일",
+        },
         "disclaimer": (
-            "같은 테마 안에서 리더(최근 60일 모멘텀 1위)가 움직이면 팔로워가 며칠 뒤 어느 방향으로 "
-            "따라갔는지를 과거 8개월 시차 상관으로 계산한 값입니다. 통계적 관계이며 인과·미래수익을 "
-            "보장하지 않습니다. 투자 자문이 아닙니다."
+            "같은 테마 안에서 '다른 종목을 가장 많이 선행 설명하는 종목'을 리더로 두고, 리더가 "
+            "며칠 뒤 팔로워를 어느 방향으로 움직였는지를 과거 8개월 시차 상관으로 계산해 통계적으로 "
+            "유의한(p<0.05) 관계만 표시한 값입니다. 통계적 관계이며 인과·미래수익을 보장하지 않습니다. "
+            "투자 자문이 아닙니다."
         ),
     }
     _CACHE[ck] = (time.time(), out)
