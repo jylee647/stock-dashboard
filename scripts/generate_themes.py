@@ -117,8 +117,14 @@ def stage2(summaries):
         '{"short":{"horizons":[{"label":"1개월 내","themes":[{"theme":"","summary":"","confidence":"높음|중간|낮음","drivers":["",""],"stocks":{"KR":[{"name":"","code":"","why":""}],"US":[{"name":"","ticker":"","why":""}]}}]},{"label":"3개월 내","themes":[]}]},'
         '"long":{"horizons":[{"label":"6개월 내","themes":[]},{"label":"1년 내","themes":[]},{"label":"1년 이상","themes":[]}]},'
         '"crossCheckNote":"국내·해외 교차검증 요약 1~2문장","sources":["네이버뉴스","Google News"]}'
+        '\n\n출력 길이 제한: 각 기간(horizon)마다 핵심 테마 최대 2개, 테마마다 종목은 국내·해외 각 1~2개로 간결하게.'
     )
-    txt = claude(STAGE2_MODEL, sys, summaries, 4000)
+    txt = claude(STAGE2_MODEL, sys, summaries, 8000).strip()
+    if txt.startswith("```"):
+        txt = txt.strip("`")
+        if txt.lower().startswith("json"):
+            txt = txt[4:]
+        txt = txt.strip()
     try:
         return json.loads(txt)
     except Exception:
@@ -126,8 +132,10 @@ def stage2(summaries):
         if m >= 0 and n > m:
             try:
                 return json.loads(txt[m:n + 1])
-            except Exception:
+            except Exception as e:
+                print("stage2 JSON 파싱 실패:", e, "| 원본 앞부분:", txt[:300])
                 return None
+    print("stage2 원본 앞부분:", (txt or "(빈응답)")[:300])
     return None
 
 
