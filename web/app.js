@@ -160,58 +160,69 @@ function themeCard(t) {
     </div></div>`;
 }
 
-/* ---------- 백테스트 ---------- */
+/* ---------- 매수 추천(백테스트) ---------- */
 async function runBacktest() {
   const months = $("#btMonths").value, hold = $("#btHold").value, top = $("#btTop").value;
   $("#btMarketLabel").textContent = state.market === "KR" ? "(한국)" : "(미국)";
-  $("#btMsg").textContent = "백테스트 계산 중… 수십 초 걸릴 수 있어요 (과거 시세 다운로드).";
-  $("#btStats").innerHTML = ""; $("#btTrades").innerHTML = ""; $("#btDisclaimer").textContent = "";
-  $("#btTradesHead").style.display = "none";
-  if (state.btChart) { state.btChart.destroy(); state.btChart = null; }
+  $("#btMsg").textContent = "분석 중… 과거 시세 다운로드로 수십 초 걸릴 수 있어요.";
+  $("#btValidation").innerHTML = ""; $("#btPicks").innerHTML = ""; $("#btDisclaimer").textContent = "";
+  $("#btPicksHead").style.display = "none";
   try {
     const d = await api(`/api/backtest?market=${state.market}&months=${months}&hold=${hold}&top=${top}`);
-    if (d.error) { $("#btMsg").textContent = "⚠️ " + d.error; return; }
-    $("#btMsg").textContent = `유니버스 ${d.universeSize}종목 · ${d.months}개월 · ${d.hold}거래일마다 상위 ${d.top}종목 보유`;
-    const s = d.stats;
-    const stat = (v, l, cls) => `<div class="bt-stat"><div class="v ${cls || ""}">${v}</div><div class="l">${l}</div></div>`;
-    $("#btStats").innerHTML =
-      stat((s.totalReturn > 0 ? "+" : "") + s.totalReturn + "%", "전략 누적수익", chgClass(s.totalReturn)) +
-      stat((s.benchReturn > 0 ? "+" : "") + s.benchReturn + "%", d.benchName + " 누적", chgClass(s.benchReturn)) +
-      stat(s.winRateVsBench + "%", "지수 대비 승률", "") +
-      stat((s.avgPerTrade > 0 ? "+" : "") + s.avgPerTrade + "%", "회당 평균수익", chgClass(s.avgPerTrade)) +
-      stat(s.trades + "회", "리밸런싱 횟수", "") +
-      stat((s.bestTrade > 0 ? "+" : "") + s.bestTrade + "% / " + s.worstTrade + "%", "최고 / 최저", "");
-    drawBtChart(d.curve, d.benchName);
-    if (d.recentTrades && d.recentTrades.length) {
-      $("#btTradesHead").style.display = "block";
-      $("#btTrades").innerHTML = d.recentTrades.map((t) =>
-        `<div class="bt-trade"><div class="tt-head"><b>${t.date}</b>
-          <span class="${chgClass(t.ret)}">${t.ret > 0 ? "+" : ""}${t.ret}% <span class="muted">(지수 ${t.benchRet > 0 ? "+" : ""}${t.benchRet}%)</span></span></div>
-          <div class="tt-picks">${t.picks.join(" · ")}</div></div>`).join("");
+    const v = d.validation || {};
+    if (v.error) {
+      $("#btMsg").textContent = "과거 검증: " + v.error;
+    } else {
+      $("#btMsg").textContent = `과거 ${d.months}개월 동안 ${v.rebalances}회 리밸런싱 · ${v.trades}건 거래로 검증`;
+      const wr = v.winRate, cls = wr >= 50 ? "up" : "down";
+      $("#btValidation").innerHTML = `
+        <div class="bt-summary">
+          <div class="bt-sum-main">
+            <div class="bt-sum-label">이 방식의 과거 적중률</div>
+            <div class="bt-sum-rate ${cls}">${wr}%</div>
+            <div class="bt-sum-sub">건당 평균수익 <b class="${chgClass(v.avgReturn)}">${v.avgReturn > 0 ? "+" : ""}${v.avgReturn}%</b> · ${d.holdLabel} 보유 기준</div>
+          </div>
+          <div class="bt-sum-stats">
+            <div><span>전략 누적</span><b class="${chgClass(v.stratTotal)}">${v.stratTotal > 0 ? "+" : ""}${v.stratTotal}%</b></div>
+            <div><span>${v.benchName}</span><b class="${chgClass(v.benchReturn)}">${v.benchReturn > 0 ? "+" : ""}${v.benchReturn}%</b></div>
+            <div><span>최고 / 최저</span><b>${v.bestTrade > 0 ? "+" : ""}${v.bestTrade}% / ${v.worstTrade}%</b></div>
+          </div>
+        </div>`;
+    }
+    const picks = d.picks || [];
+    if (picks.length) {
+      $("#btPicksHead").style.display = "block";
+      $("#btPicks").innerHTML = picks.map((p, i) => btPickCard(p, i + 1)).join("");
+      $("#btPicks").querySelectorAll(".bt-pick").forEach((el) => {
+        const s = { symbol: el.dataset.sym, market: el.dataset.mk, name: el.dataset.name };
+        el.addEventListener("click", () => { switchTab("dashboard"); selectStock(s); });
+      });
+    } else {
+      $("#btPicks").innerHTML = `<div class="loading">추천 종목을 불러오지 못했습니다.</div>`;
     }
     $("#btDisclaimer").textContent = "※ " + (d.disclaimer || "");
-  } catch (e) { $("#btMsg").textContent = "백테스트 실패: 서버/네트워크 확인"; }
+  } catch (e) { $("#btMsg").textContent = "분석 실패: 서버/네트워크 확인"; }
 }
 
-function drawBtChart(curve, benchName) {
-  const ctx = $("#btChart").getContext("2d");
-  if (state.btChart) state.btChart.destroy();
-  state.btChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: curve.map((p) => p.date),
-      datasets: [
-        { label: "전략", data: curve.map((p) => p.strategy), borderColor: "#0071e3", backgroundColor: "#0071e322", borderWidth: 2, fill: true, pointRadius: 0, tension: 0.1 },
-        { label: benchName, data: curve.map((p) => p.benchmark), borderColor: "#8e8e93", borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, tension: 0.1 },
-      ],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#1d1d1f", usePointStyle: true } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y > 0 ? "+" : ""}${c.parsed.y}%` } } },
-      scales: { x: { ticks: { color: "#8e8e93", maxTicksLimit: 8 }, grid: { display: false } },
-        y: { ticks: { color: "#8e8e93", callback: (v) => v + "%" }, grid: { color: "#ededf0" } } },
-    },
-  });
+function btPickCard(p, rank) {
+  const c2 = p.market === "KR" ? "₩" : "$";
+  const tags = (p.tags || []).map((t) => `<span class="theme-tag">${t}</span>`).join("");
+  return `<div class="bt-pick" data-sym="${p.symbol}" data-mk="${p.market}" data-name="${(p.name || "").replace(/"/g, "&quot;")}">
+    <div class="bt-pick-rank">${rank}</div>
+    <div class="bt-pick-main">
+      <div class="bt-pick-name">${p.name || p.symbol} <span class="sl-sym">${p.symbol}</span>
+        <span class="reco-chg ${chgClass(p.changePct)}">${chgStr(p.changePct)}</span>${p.rsi != null ? ` <span class="muted" style="font-size:11px">RSI ${p.rsi}</span>` : ""}</div>
+      ${tags ? `<div class="reco-tags">${tags}</div>` : ""}
+      <div class="reco-reason">${p.reason || ""}</div>
+      <div class="bt-prices">
+        <span class="pp"><span class="ppl">현재가</span><b>${c2}${fmtNum(p.price, p.market)}</b></span>
+        <span class="pp"><span class="ppl">목표가</span><b class="up">${c2}${fmtNum(p.target, p.market)}</b> <small class="up">+${p.targetPct}%</small></span>
+        <span class="pp"><span class="ppl">손절가</span><b class="down">${c2}${fmtNum(p.stop, p.market)}</b> <small class="down">-${p.stopPct}%</small></span>
+        <span class="pp"><span class="ppl">보유</span><b>${p.holdLabel}</b></span>
+      </div>
+    </div>
+    <div class="bt-pick-score">${p.score}<small>점수</small></div>
+  </div>`;
 }
 
 /* ---------- 추천 ---------- */
