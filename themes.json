@@ -1,0 +1,430 @@
+{
+  "short": {
+    "horizons": [
+      {
+        "label": "1개월 내",
+        "themes": [
+          {
+            "theme": "AI 반도체 수급 재편",
+            "summary": "브로드컴의 AI 칩 가이던스 부진으로 단기 반도체 섹터 전반 약세가 나타났으나, SK-엔비디아-TSMC 삼각동맹 강화로 중장기 공급망 재편 모멘텀은 유효. 단기적으로는 변동성 확대 구간.",
+            "confidence": "높음",
+            "drivers": [
+              "브로드컴 AI 가이던스 쇼크(KR·US 교차 확인)",
+              "TSMC 수요 충족 가동 및 가격 인상 시도",
+              "SK하이닉스-엔비디아-TSMC 공급망 협력 심화"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "SK하이닉스",
+                  "code": "000660",
+                  "why": "엔비디아향 HBM 공급 핵심 파트너, 삼각동맹 수혜 최대주자"
+                },
+                {
+                  "name": "삼성전자",
+                  "code": "005930",
+                  "why": "HBM·파운드리 양면 대응, 단기 조정 후 저점 매수 기회"
+                }
+              ],
+              "US": [
+                {
+                  "name": "NVIDIA",
+                  "ticker": "NVDA",
+                  "why": "AI 가속기 수요 핵심 수혜주, 공급망 재편 중심축"
+                },
+                {
+                  "name": "TSMC",
+                  "ticker": "TSM",
+                  "why": "AI 칩 생산 독점적 위치, 가격 인상으로 수익성 개선 기대"
+                }
+              ]
+            }
+          },
+          {
+            "theme": "전력망 인프라 & 데이터센터 전력",
+            "summary": "AI 데이터센터 급증으로 미국 전력망 부담이 극심해지고, 텍사스 전력수요가 평균 5배 이상 성장. 국내에서는 GaN 반도체 기반 고전력 밀도 솔루션과 해저 케이블 수주가 동시에 부상.",
+            "confidence": "높음",
+            "drivers": [
+              "AI 데이터센터 전력 수요 폭증(KR·US 교차 확인)",
+              "GaN 반도체 기술로 랙당 1MW 고전력 밀도 달성",
+              "대한전선 영국 스코틀랜드 송전망 수주"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "대한전선",
+                  "code": "001430",
+                  "why": "유럽 송전망 수주 확대, AI 데이터센터 전력 인프라 수혜"
+                },
+                {
+                  "name": "HD현대일렉트릭",
+                  "code": "267260",
+                  "why": "전력 기기 수요 급증, HVDC 및 변압기 공급 핵심 업체"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Vistra Energy",
+                  "ticker": "VST",
+                  "why": "텍사스 전력 수요 급증 최대 수혜 발전사"
+                },
+                {
+                  "name": "Eaton Corporation",
+                  "ticker": "ETN",
+                  "why": "데이터센터 전력관리 솔루션 및 전력망 인프라 글로벌 리더"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "label": "3개월 내",
+        "themes": [
+          {
+            "theme": "휴머노이드 로봇 & 피지컬 AI",
+            "summary": "Jensen Huang의 40조 달러 시장 전망 발언, Serve Robotics 사업 확장, 국내 아이엘의 산업현장 데이터 500만 건 구축 등 KR·US 동시 모멘텀 확인. 피지컬 AI 데이터 플랫폼 선점 경쟁 가열.",
+            "confidence": "높음",
+            "drivers": [
+              "Jensen Huang 휴머노이드 40조달러 시장 전망(US)",
+              "아이엘 산업용 AI 운영 데이터 500만 건 확보(KR)",
+              "인텔-히타치 피지컬 AI 생산 자동화 도입"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "레인보우로보틱스",
+                  "code": "277810",
+                  "why": "삼성전자 투자, 국내 대표 협동로봇·휴머노이드 개발사"
+                },
+                {
+                  "name": "현대로보틱스",
+                  "code": "267270",
+                  "why": "산업용 로봇 국내 1위, 스마트팩토리 확장 수혜"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Figure AI (Serve Robotics)",
+                  "ticker": "SERV",
+                  "why": "도시 배송 자동화 로봇 상용화 선두, 사업 확장 가시화"
+                },
+                {
+                  "name": "Tesla",
+                  "ticker": "TSLA",
+                  "why": "Optimus 휴머노이드 로봇 상용화 로드맵, 피지컬 AI 생태계 구축"
+                }
+              ]
+            }
+          },
+          {
+            "theme": "우주·방위 기술 투자 붐",
+            "summary": "미래에셋 TIGER 우주테크 ETF 50일 만에 2조 돌파, 미국 MARS ETF 출시, Applied Aerospace 6.5억 달러 IPO, Sierra Space 80억 달러 밸류 등 KR·US 동시에 우주방위 투자 수요 폭발적 확대.",
+            "confidence": "높음",
+            "drivers": [
+              "TIGER 우주테크 ETF 순자산 2조 돌파(KR)",
+              "MARS ETF 출시 및 Applied Aerospace IPO(US)",
+              "스페이스X 상장 임박 기대감",
+              "에이치브이엠 1분기 영업이익 292% 급증"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "에이치브이엠",
+                  "code": "310200",
+                  "why": "스페이스X향 특수합금 공급, 우주방산소재 국내 대표주"
+                },
+                {
+                  "name": "한화에어로스페이스",
+                  "code": "012450",
+                  "why": "국내 방위·우주 기술 통합 대표 기업, 발사체·위성 사업 확대"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Rocket Lab",
+                  "ticker": "RKLB",
+                  "why": "소형 발사체 상업화 선두, 우주 인프라 전방위 확장"
+                },
+                {
+                  "name": "Palantir Technologies",
+                  "ticker": "PLTR",
+                  "why": "방위·AI 융합 데이터 플랫폼, 군사기술 투자 확대 최대 수혜"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "long": {
+    "horizons": [
+      {
+        "label": "6개월 내",
+        "themes": [
+          {
+            "theme": "차세대 배터리 & 핵심광물 공급망",
+            "summary": "CATL 6분 급속충전·1000km 배터리 상용화, 닛산-겔리온 고체 리튬황 전지 공동개발, 국내 LFP 양극재·ESS 수요 확대, 고려아연 BESS 프로젝트 승인 등 KR·US 교차 확인. 전기차 캐즘 극복 이후 저점 매수 재개 신호.",
+            "confidence": "높음",
+            "drivers": [
+              "CATL 초급속 충전 배터리 상용화(US)",
+              "닛산-겔리온 고체 리튬황 배터리 공동개발(US)",
+              "LFP 양극재 ESS·보급형 EV 수요 확대(KR)",
+              "고려아연 아크에너지 BESS 프로젝트 전력망 연결 승인(KR)",
+              "리튬·니켈·희토류 수요 급증(KR)"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "에코프로비엠",
+                  "code": "247540",
+                  "why": "양극재 국내 1위, LFP·하이니켈 포트폴리오 다변화"
+                },
+                {
+                  "name": "고려아연",
+                  "code": "010130",
+                  "why": "BESS 프로젝트 및 핵심광물 제련 수직계열화 수혜"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Albemarle",
+                  "ticker": "ALB",
+                  "why": "글로벌 리튬 최대 생산업체, 핵심광물 수요 급증 직접 수혜"
+                },
+                {
+                  "name": "QuantumScape",
+                  "ticker": "QS",
+                  "why": "전고체 배터리 선두 개발사, 차세대 배터리 상용화 모멘텀"
+                }
+              ]
+            }
+          },
+          {
+            "theme": "AI 인프라 클라우드 확장 투자",
+            "summary": "구글 850억 달러 AI 클라우드 인프라 투자 발표가 US에서 확인되고, 국내 데이터센터 전력·GaN 반도체 기술 뉴스와 교차 검증됨. 빅테크의 AI 인프라 투자 사이클은 6개월 이상 지속될 구조적 트렌드.",
+            "confidence": "높음",
+            "drivers": [
+              "구글 $85B AI 인프라 투자 확정(US)",
+              "GaN 반도체 고전력 밀도 솔루션 상용화(KR)",
+              "AI 데이터센터 전력망 투자 급증(KR·US 교차)"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "파워로직스",
+                  "code": "047310",
+                  "why": "데이터센터 전력관리 부품 공급, AI 인프라 투자 수혜"
+                },
+                {
+                  "name": "한미반도체",
+                  "code": "042700",
+                  "why": "HBM 패키징 핵심 장비, AI 반도체 생산 증가 직접 수혜"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Alphabet (Google)",
+                  "ticker": "GOOGL",
+                  "why": "$85B AI 인프라 투자 주체, 클라우드 AI 경쟁력 강화"
+                },
+                {
+                  "name": "Arista Networks",
+                  "ticker": "ANET",
+                  "why": "AI 데이터센터 네트워킹 장비 독점적 공급자"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "label": "1년 내",
+        "themes": [
+          {
+            "theme": "바이오 & 신약개발 플랫폼",
+            "summary": "알츠하이머 신약 후보 발굴, 합성생물학 바이오소재, 마이크로바이옴 AI 시뮬레이션, 한국 BMS 스타트업 발굴 등 KR·US 전방위 확인. AI 기반 신약 개발 플랫폼이 1년 내 본격 상업화 단계 진입 예상.",
+            "confidence": "중간",
+            "drivers": [
+              "알츠하이머 신약 후보 발굴(US)",
+              "마이크로바이옴 AI 시뮬레이션 신약(KR)",
+              "합성생물학 바이오소재 상용화(US)",
+              "바이오 안보 규제 강화로 국내 기업 반사이익(KR·US)"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "휴온스글로벌",
+                  "code": "084110",
+                  "why": "마이크로바이옴 AI 시뮬레이션 기반 신약·웰니스 플랫폼 선도"
+                },
+                {
+                  "name": "셀트리온",
+                  "code": "068270",
+                  "why": "바이오시밀러 글로벌 확장, 차세대 항체 플랫폼 보유"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Moderna",
+                  "ticker": "MRNA",
+                  "why": "mRNA 플랫폼 다각화, 합성생물학 기반 신약 개발 선두"
+                },
+                {
+                  "name": "Recursion Pharmaceuticals",
+                  "ticker": "RXRX",
+                  "why": "AI 기반 신약 발굴 플랫폼, 빅파마와 협력 파이프라인 다수"
+                }
+              ]
+            }
+          },
+          {
+            "theme": "양자컴퓨팅 생태계 구축",
+            "summary": "Microsoft-Atom Computing 성능 개선, IBM Qiskit 개발자 생태계, Quantinuum 나스닥 상장 등 US 중심 모멘텀. 국내 뉴스는 상대적으로 적어 신뢰도 중간이나 1년 내 상업화 초기 진입 예상.",
+            "confidence": "중간",
+            "drivers": [
+              "Microsoft 양자칩 성능 개선 진전(US)",
+              "IBM Qiskit 개발자 생태계 확대(US)",
+              "Quantinuum 나스닥 상장으로 투자 접근성 확대(US)",
+              "Citi IBM 양자컴퓨팅 시장 지위 강화 전망(US)"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "삼성전자",
+                  "code": "005930",
+                  "why": "양자 반도체 소자 R&D 및 차세대 반도체 기술 대응 역량 보유"
+                }
+              ],
+              "US": [
+                {
+                  "name": "IBM",
+                  "ticker": "IBM",
+                  "why": "양자컴퓨팅 상업화 최선두, Qiskit 생태계 1위"
+                },
+                {
+                  "name": "Microsoft",
+                  "ticker": "MSFT",
+                  "why": "Azure 양자 서비스 및 Atom Computing 협력으로 양자 인프라 선점"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "label": "1년 이상",
+        "themes": [
+          {
+            "theme": "피지컬 AI & 스마트 제조 자동화",
+            "summary": "삼성중공업 S-EDH 디지털-AI-로봇 통합 스마트팩토리, 인텔 히타치 AI 생산 자동화, 아이엘 산업용 AI 데이터 500만 건 축적 등 KR 주도. US에서도 Jensen Huang 40조달러 휴머노이드 시장 전망으로 교차 확인. 장기 산업 전환의 핵심 인프라.",
+            "confidence": "높음",
+            "drivers": [
+              "삼성중공업 S-EDH 스마트팩토리 전면 도입(KR)",
+              "아이엘 피지컬 AI 데이터 500만 건 플랫폼 구축(KR)",
+              "Jensen Huang 40조달러 휴머노이드 시장 전망(US)",
+              "글로벌 제조업 자동화 전환 가속"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "삼성중공업",
+                  "code": "010140",
+                  "why": "S-EDH 플랫폼으로 스마트 조선 선도, AI·로봇 통합 자동화 최전선"
+                },
+                {
+                  "name": "두산로보틱스",
+                  "code": "454910",
+                  "why": "협동로봇 국내 선두, 스마트 제조 자동화 확산 수혜"
+                }
+              ],
+              "US": [
+                {
+                  "name": "Intuitive Surgical",
+                  "ticker": "ISRG",
+                  "why": "수술 로봇 세계 1위, 피지컬 AI 의료·제조 융합 선도"
+                },
+                {
+                  "name": "ABB Ltd",
+                  "ticker": "ABB",
+                  "why": "산업용 자동화·로봇 글로벌 리더, 스마트팩토리 전환 최대 수혜"
+                }
+              ]
+            }
+          },
+          {
+            "theme": "우주 경제 & 방위 기술 산업화",
+            "summary": "스페이스X 상장 기대, Sierra Space 80억달러 밸류, True Anomaly 우주방위 솔루션, TIGER ETF 2조 돌파 등 KR·US 모두 강한 모멘텀. 1년 이상 장기적으로 우주 경제가 독립적 산업 생태계로 성장.",
+            "confidence": "높음",
+            "drivers": [
+              "스페이스X 상장 임박(KR·US 교차)",
+              "Sierra Space 80억달러 밸류, 방위우주 투자 확대(US)",
+              "True Anomaly·Voyager 우주방위 허브 구축(US)",
+              "TIGER 우주테크 ETF 2조 돌파로 국내 투자 수요 확인(KR)"
+            ],
+            "stocks": {
+              "KR": [
+                {
+                  "name": "한화에어로스페이스",
+                  "code": "012450",
+                  "why": "발사체·위성·방산 수직계열화, 국내 뉴스페이스 핵심 수혜주"
+                },
+                {
+                  "name": "에이치브이엠",
+                  "code": "310200",
+                  "why": "스페이스X 특수합금 공급 독점적 위치, 우주소재 장기 수혜"
+                }
+              ],
+              "US": [
+                {
+                  "name": "SpaceX (Rocket Lab proxy)",
+                  "ticker": "RKLB",
+                  "why": "스페이스X 상장 전 뉴스페이스 대표 상장사, 발사 서비스 확장"
+                },
+                {
+                  "name": "Northrop Grumman",
+                  "ticker": "NOC",
+                  "why": "우주방위 통합 시스템 글로벌 리더, 정부 계약 장기 안정성"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "crossCheckNote": "KR·US 교차검증 결과: ① AI반도체 약세(브로드컴 쇼크)는 KR·US 동시 확인으로 신뢰도 높음. ② 휴머노이드 로봇·피지컬 AI는 KR(아이엘, 삼성중공업)·US(Jensen Huang 발언, Serve Robotics) 동시 포착으로 신뢰도 높음. ③ 우주·방위기술은 KR(TIGER ETF, 에이치브이엠)·US(MARS ETF, Applied Aerospace, Sierra Space) 동시 확인으로 신뢰도 매우 높음. ④ 전력망 인프라는 KR(대한전선 수주, GaN)·US(텍사스 전력급증, Duke Energy) 교차 확인으로 신뢰도 높음. ⑤ 양자컴퓨팅은 US 중심 뉴스로 KR 교차 근거 부족, 신뢰도 중간. ⑥ 바이오 신약은 KR(휴온스, BMS)·US(알츠하이머, 합성생물학) 부분 교차로 신뢰도 중간. ⑦ 차세대 배터리는 KR(LFP, BESS, 핵심광물)·US(CATL, 고체전지) 교차로 신뢰도 높음.",
+  "sources": [
+    "[KR] AI 반도체: 브로드컴 부진 삼성·SK하이닉스 하락",
+    "[KR] SK-엔비디아-TSMC AI 삼각동맹",
+    "[KR] GaN 반도체 고전력 밀도",
+    "[KR] 핵심광물 수요 급증",
+    "[KR] LFP 양극재 ESS 확대",
+    "[KR] 피지컬 AI 데이터 아이엘 500만건",
+    "[KR] 삼성중공업 S-EDH 스마트팩토리",
+    "[KR] 마이크로바이옴 신약 휴온스글로벌",
+    "[KR] 우주테크 ETF 2조 돌파",
+    "[KR] 에이치브이엠 292% 영업이익",
+    "[KR] 대한전선 영국 송전망 수주",
+    "[KR] 고려아연 BESS 프로젝트 승인",
+    "[US] 브로드컴 AI 가이던스 부진 마이크론 7% 하락",
+    "[US] 구글 $85B AI 인프라 투자",
+    "[US] CATL 6분 급속충전 1000km 배터리",
+    "[US] Jensen Huang 40조달러 휴머노이드 전망",
+    "[US] Serve Robotics 자동화 확장",
+    "[US] 텍사스 전력수요 급증",
+    "[US] Microsoft-Atom Computing 양자칩",
+    "[US] IBM 양자컴퓨팅 생태계",
+    "[US] Applied Aerospace IPO 6.5억달러",
+    "[US] Sierra Space 80억달러 밸류",
+    "[US] MARS ETF 출시",
+    "[US] 알츠하이머 신약 후보"
+  ],
+  "generatedAt": "2026-06-05 16:06 KST",
+  "model": {
+    "stage1": "claude-haiku-4-5",
+    "stage2": "claude-sonnet-4-6"
+  },
+  "articleCount": 76
+}
