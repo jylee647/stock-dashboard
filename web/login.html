@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주식 대시보드 — 로그인</title>
+  <style>
+    :root{--bg:#f5f5f7;--card:#fff;--line:#e3e3e6;--txt:#1d1d1f;--txt2:#6e6e73;--accent:#0071e3;--down:#ff3b30;--up:#34c759;
+      --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Apple SD Gothic Neo","Malgun Gothic",sans-serif;}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);font-family:var(--font);color:var(--txt);min-height:100vh;display:flex;align-items:center;justify-content:center;letter-spacing:-0.01em}
+    .box{background:var(--card);width:360px;max-width:92vw;border:1px solid var(--line);border-radius:20px;padding:34px 30px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06),0 12px 40px rgba(0,0,0,.08)}
+    .brand{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px}
+    .sub{font-size:13px;color:var(--txt2);text-align:center;margin-bottom:24px}
+    .tabs{display:flex;background:#ececef;border-radius:11px;padding:3px;margin-bottom:22px}
+    .tabs button{flex:1;background:none;border:none;padding:9px;border-radius:9px;font-weight:600;font-size:14px;color:var(--txt2);cursor:pointer;font-family:inherit}
+    .tabs button.active{background:#fff;color:var(--txt);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+    label{display:block;font-size:12px;color:var(--txt2);margin:14px 0 6px}
+    input{width:100%;background:#f0f0f3;border:1px solid transparent;border-radius:11px;padding:12px 14px;font-size:15px;outline:none;font-family:inherit}
+    input:focus{background:#fff;border-color:var(--accent);box-shadow:0 0 0 4px rgba(0,113,227,.12)}
+    .btn{width:100%;margin-top:22px;background:var(--accent);color:#fff;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+    .btn:hover{background:#0060c0}
+    .btn:disabled{opacity:.6;cursor:default}
+    .msg{font-size:13px;margin-top:14px;text-align:center;min-height:18px}
+    .msg.err{color:var(--down)} .msg.ok{color:var(--up)}
+    .hint{font-size:11px;color:var(--txt2);margin-top:18px;text-align:center;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="brand">📈 주식 대시보드</div>
+    <div class="sub" id="sub">로그인하고 시작하세요</div>
+    <div class="tabs">
+      <button id="tabLogin" class="active" onclick="setMode('login')">로그인</button>
+      <button id="tabReg" onclick="setMode('register')">회원가입</button>
+    </div>
+    <form id="form" onsubmit="return submitForm(event)">
+      <label>아이디</label>
+      <input id="username" autocomplete="username" autocapitalize="none" required />
+      <label>비밀번호</label>
+      <input id="password" type="password" autocomplete="current-password" required />
+      <button class="btn" id="submitBtn" type="submit">로그인</button>
+    </form>
+    <div class="msg" id="msg"></div>
+    <div class="hint" id="hint"></div>
+  </div>
+
+  <script>
+    let mode = "login";
+    function setMode(m) {
+      mode = m;
+      document.getElementById("tabLogin").classList.toggle("active", m === "login");
+      document.getElementById("tabReg").classList.toggle("active", m === "register");
+      document.getElementById("submitBtn").textContent = m === "login" ? "로그인" : "회원가입";
+      document.getElementById("sub").textContent = m === "login" ? "로그인하고 시작하세요" : "새 계정을 만드세요";
+      document.getElementById("password").setAttribute("autocomplete", m === "login" ? "current-password" : "new-password");
+      document.getElementById("hint").textContent = m === "register" ? "아이디 3자 이상, 비밀번호 6자 이상" : "";
+      document.getElementById("msg").textContent = "";
+    }
+    async function submitForm(e) {
+      e.preventDefault();
+      const u = document.getElementById("username").value.trim();
+      const p = document.getElementById("password").value;
+      const msg = document.getElementById("msg");
+      const btn = document.getElementById("submitBtn");
+      if (mode === "register" && (u.length < 3 || p.length < 6)) {
+        msg.className = "msg err"; msg.textContent = "아이디 3자·비밀번호 6자 이상이어야 합니다."; return false;
+      }
+      btn.disabled = true; msg.className = "msg"; msg.textContent = "처리 중…";
+      try {
+        const r = await fetch("/api/" + mode, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: u, password: p }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) { msg.className = "msg ok"; msg.textContent = "완료! 이동 중…"; location.href = "/"; }
+        else { msg.className = "msg err"; msg.textContent = d.error || (r.status === 401 ? "아이디 또는 비밀번호가 틀렸습니다." : "실패했습니다."); btn.disabled = false; }
+      } catch (err) { msg.className = "msg err"; msg.textContent = "네트워크 오류"; btn.disabled = false; }
+      return false;
+    }
+  </script>
+</body>
+</html>

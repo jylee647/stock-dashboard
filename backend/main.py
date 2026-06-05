@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -21,7 +21,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-from backend import backtest, news, providers, recommend, themes  # noqa: E402
+from backend import auth, backtest, db, news, providers, recommend, themes  # noqa: E402
 
 app = FastAPI(title="주식 대시보드", version="1.0")
 app.add_middleware(
@@ -59,7 +59,80 @@ def _warm_loop():
 
 @app.on_event("startup")
 def _start_warmer():
+    try:
+        db.init_db()
+    except Exception as e:
+        print("DB init 실패:", e)
     threading.Thread(target=_warm_loop, daemon=True).start()
+
+
+# ---------------------------------------------------------------------------
+# 인증 미들웨어 — DATABASE_URL 있을 때만 활성. 비로그인 시 로그인 페이지/401.
+# ---------------------------------------------------------------------------
+_OPEN_PATHS = ("/api/login", "/api/register", "/api/health")
+
+
+@app.middleware("http")
+async def _auth_mw(request: Request, call_next):
+    if not db.auth_enabled():
+        return await call_next(request)
+    path = request.url.path
+    if path in _OPEN_PATHS:
+        return await call_next(request)
+    user = auth.read_session(request.cookies.get("session", ""))
+    if user:
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return FileResponse(WEB_DIR / "login.html")
+
+
+class Credentials(BaseModel):
+    username: str
+    password: str
+
+
+def _set_session_cookie(resp: Response, username: str):
+    resp.set_cookie("session", auth.make_session(username), max_age=auth.SESSION_TTL,
+                    httponly=True, secure=True, samesite="lax")
+
+
+@app.post("/api/register")
+def register(cred: Credentials):
+    u, p = cred.username.strip(), cred.password
+    if len(u) < 3 or len(p) < 6:
+        raise HTTPException(400, "아이디 3자·비밀번호 6자 이상")
+    if not db.create_user(u, auth.hash_password(p)):
+        return JSONResponse({"error": "이미 존재하는 아이디입니다."}, status_code=409)
+    resp = JSONResponse({"ok": True, "username": u})
+    _set_session_cookie(resp, u)
+    return resp
+
+
+@app.post("/api/login")
+def login(cred: Credentials):
+    u = cred.username.strip()
+    row = db.get_user(u)
+    if not row or not auth.verify_password(cred.password, row["pw_hash"]):
+        raise HTTPException(401, "아이디 또는 비밀번호가 틀렸습니다.")
+    resp = JSONResponse({"ok": True, "username": u})
+    _set_session_cookie(resp, u)
+    return resp
+
+
+@app.post("/api/logout")
+def logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("session")
+    return resp
+
+
+@app.get("/api/me")
+def me(request: Request):
+    if not db.auth_enabled():
+        return {"username": None, "authEnabled": False}
+    user = auth.read_session(request.cookies.get("session", ""))
+    return {"username": user, "authEnabled": True}
 
 
 # ---------------------------------------------------------------------------

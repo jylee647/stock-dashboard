@@ -28,6 +28,7 @@ async function api(path) { const r = await fetch(API + path); if (!r.ok) throw n
 /* ---------- 초기화 ---------- */
 async function init() {
   bindUI();
+  checkAuth();
   await Promise.all([loadIndices(), loadWatchlist(), loadGainers()]);
   await loadMarketNews();
   renderAlerts();
@@ -61,6 +62,20 @@ function bindUI() {
   // 알림 모달
   $("#alertCancel").addEventListener("click", () => $("#alertModal").classList.add("hidden"));
   $("#alertSave").addEventListener("click", saveAlert);
+  $("#logoutBtn").addEventListener("click", async () => {
+    await fetch("/api/logout", { method: "POST" });
+    location.href = "/";
+  });
+}
+
+async function checkAuth() {
+  try {
+    const d = await api("/api/me");
+    if (d.authEnabled && d.username) {
+      $("#userName").textContent = d.username + " 님";
+      $("#userBox").classList.remove("hidden");
+    }
+  } catch {}
 }
 
 async function checkHealth() {

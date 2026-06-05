@@ -55,6 +55,8 @@ button{font-family:inherit;cursor:pointer;letter-spacing:inherit}
 .search-results .sr-item:hover{background:rgba(0,113,227,.08)}
 .sr-item .sr-mk{font-size:11px;color:var(--txt3)}
 .status{margin-left:auto;color:var(--up);font-size:13px}
+.user-box{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt2)}
+.user-box #userName{font-weight:600;color:var(--txt)}
 
 /* ===== 티커 스트립 ===== */
 .ticker-strip{display:flex;gap:26px;overflow-x:auto;padding:11px 26px;

@@ -229,7 +229,7 @@ def _name_of(code: str, market: str) -> str:
 # ---------------------------------------------------------------------------
 def get_top_gainers(market: str, limit: int = 10) -> List[Dict]:
     ck = f"gainers:{market}:{limit}"
-    cached = _cache_get(ck, ttl=60)
+    cached = _cache_get(ck, ttl=300)
     if cached:
         return cached
     if market == "US":
@@ -340,7 +340,7 @@ def _recent_two_bdays():
 # ---------------------------------------------------------------------------
 def get_indices() -> Dict:
     ck = "indices"
-    cached = _cache_get(ck, ttl=60)
+    cached = _cache_get(ck, ttl=300)
     if cached:
         return cached
     out = {"KR": [], "US": [], "FX": []}
