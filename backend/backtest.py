@@ -32,8 +32,8 @@ _BENCH_NAME = {"KR": "코스피", "US": "S&P 500"}
 _HOLD_LABEL = {5: "1주", 20: "1달", 60: "3달"}
 
 # 목표/손절 배수 (변동성 밴드 기준) — 보상:위험 비대칭으로 기대수익 양수 유도
-_TP_MULT = 1.2   # 목표가 = entry * (1 + 1.2 * band)  [v5: 이익 실현 앞당겨 승률↑]
-_SL_MULT = 1.4   # 손절가 = entry * (1 - 1.4 * band)  [손익분기 승률 ~54%]
+_TP_MULT = 1.0   # 목표가 = entry * (1 + 1.0 * band)  [v6: 더 앞당긴 이익실현]
+_SL_MULT = 1.2   # 손절가 = entry * (1 - 1.2 * band)  [손익분기 승률 ~54.5%]
 
 
 def _universe(market: str) -> Dict[str, str]:
@@ -172,7 +172,7 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
                 continue
             # 상대강도(RS): 지수 대비 60일 초과수익이 +1.5% 이상인 '시장 주도주'만 매수
             rs = (r60 - breq) if (np.isfinite(r60) and np.isfinite(breq)) else 0.0
-            if rs <= 0.015:
+            if rs <= 0.025:
                 continue
             # 랭킹 점수: 상대강도 + 모멘텀 + 추세강도, 과열(15%↑) 페널티
             trend_str = m20 / m60 - 1
@@ -185,7 +185,7 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             continue
         # 점수 하한(품질 바닥): 약한 구간에선 종목 수를 줄여 평균 품질을 높임 → 적중률↑
         ranked = sorted(cand, key=cand.get, reverse=True)
-        picks = [s for s in ranked if cand[s] >= 0.08][:top]
+        picks = [s for s in ranked if cand[s] >= 0.10][:top]
         if not picks:
             skipped_nopick += 1
             continue
