@@ -32,8 +32,8 @@ _BENCH_NAME = {"KR": "코스피", "US": "S&P 500"}
 _HOLD_LABEL = {5: "1주", 20: "1달", 60: "3달"}
 
 # 목표/손절 배수 (변동성 밴드 기준) — 보상:위험 비대칭으로 기대수익 양수 유도
-_TP_MULT = 2.0   # 목표가 = entry * (1 + 2.0 * band)
-_SL_MULT = 1.6   # 손절가 = entry * (1 - 1.6 * band)
+_TP_MULT = 1.2   # 목표가 = entry * (1 + 1.2 * band)  [v5: 이익 실현 앞당겨 승률↑]
+_SL_MULT = 1.4   # 손절가 = entry * (1 - 1.4 * band)  [손익분기 승률 ~54%]
 
 
 def _universe(market: str) -> Dict[str, str]:
