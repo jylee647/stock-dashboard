@@ -30,6 +30,40 @@ NEG_KW = [
     "weak", "low", "cut", "bearish", "underperform", "lawsuit", "warning", "risk",
 ]
 
+# 테마 태그 키워드 (뉴스/종목명에서 매칭 → #태그)
+THEME_TAGS = [
+    ("#AI", ["ai", "인공지능", "에이아이", "gpt", "llm", "머신러닝", "딥러닝", "생성형"]),
+    ("#반도체", ["반도체", "semiconductor", "hbm", "파운드리", "웨이퍼", "메모리", "디램", "낸드", "soc"]),
+    ("#광통신", ["광통신", "광트랜시버", "optical", "광모듈", "실리콘포토닉스", "광인터커넥트"]),
+    ("#2차전지", ["2차전지", "이차전지", "배터리", "battery", "양극재", "음극재", "전해질", "전고체"]),
+    ("#전기차", ["전기차", "테슬라", "tesla", "자율주행", " ev"]),
+    ("#바이오", ["바이오", "제약", "신약", "임상", "biotech", "pharma", "항체", "fda"]),
+    ("#로봇", ["로봇", "robot", "휴머노이드", "자동화"]),
+    ("#방산", ["방산", "국방", "defense", "미사일", "무기", "우주항공", "방위"]),
+    ("#양자", ["양자", "quantum"]),
+    ("#전력인프라", ["변압기", "송전", "전력기기", "grid", "전선", "전력망"]),
+    ("#원전", ["원전", "원자력", "nuclear", "smr"]),
+    ("#에너지", ["태양광", "풍력", "수소", "재생에너지", "solar", "energy"]),
+    ("#금융", ["증권", "은행", "보험", "지주", "금융", "bank", "fintech"]),
+    ("#게임", ["게임", "game"]),
+    ("#엔터", ["엔터", "연예", "k-pop", "아이돌", "음반"]),
+    ("#조선", ["조선", "선박", "shipbuilding", "해양"]),
+    ("#화장품", ["화장품", "뷰티", "cosmetic"]),
+    ("#철강", ["철강", "steel", "포스코"]),
+]
+
+
+def _theme_tags(text: str, name: str) -> List[str]:
+    blob = (text + " " + (name or "")).lower()
+    out = []
+    for tag, kws in THEME_TAGS:
+        if any(kw in blob for kw in kws):
+            out.append(tag)
+        if len(out) >= 3:
+            break
+    return out
+
+
 _CACHE: Dict[str, tuple] = {}
 
 
@@ -189,11 +223,14 @@ def recommend(market: str, limit: int = 10) -> Dict:
         if not daily:
             return None
         ind = signals.indicators(daily, c.get("price"), c.get("changePct"), market)
+        nitems = []
         try:
             nitems = news_mod.get_stock_news(c["symbol"], market, c.get("name", ""), limit=5)
             sent, nvol = _score_news(nitems)
         except Exception:
             sent, nvol = 0.0, 0
+        newstext = " ".join(((n.get("title") or "") + " " + (n.get("summary") or "")) for n in nitems)
+        tags = _theme_tags(newstext, c.get("name", ""))
         # 진입여력
         entry = ind["room"]
         if ind["limitLocked"]:
@@ -214,6 +251,7 @@ def recommend(market: str, limit: int = 10) -> Dict:
             "symbol": c["symbol"], "market": market, "name": c.get("name") or c["symbol"],
             "price": c.get("price") or ind.get("price"), "changePct": c.get("changePct"),
             "rsi": round(rsi) if rsi is not None else None,
+            "tags": tags,
             "_entry": entry, "_trend": trend, "_value": value, "_sent": sent, "_int": interest,
             "_limit": ind["limitLocked"],
         }

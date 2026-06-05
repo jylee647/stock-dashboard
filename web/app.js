@@ -251,6 +251,7 @@ function recoRow(it, rank) {
     <div class="reco-main">
       <div class="reco-name">${it.name || it.symbol} <span class="sl-sym">${it.symbol}</span>
         <span class="reco-chg ${chgClass(it.changePct)}">${chgStr(it.changePct)}</span>${it.rsi != null ? ` <span class="muted" style="font-size:11px">RSI ${it.rsi}</span>` : ""}</div>
+      ${(it.tags && it.tags.length) ? `<div class="reco-tags">${it.tags.map((t) => `<span class="theme-tag">${t}</span>`).join("")}</div>` : ""}
       <div class="reco-reason">${it.reason || ""}</div>
       <div class="bd-table">
         <div class="bd-head"><span class="bd-label">항목</span><span class="bd-wt">가중치</span><div class="bd-track" style="visibility:hidden"></div><span class="bd-norm">항목점수</span><span class="bd-pts">기여</span></div>
