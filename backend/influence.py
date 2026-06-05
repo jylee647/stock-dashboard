@@ -183,9 +183,11 @@ def _clean_returns(closeDF: pd.DataFrame, cap: float) -> pd.DataFrame:
 
 
 def _clean_momentum(ret: pd.Series, win: int = 60) -> float:
-    """이상치 제거된 일일수익률의 최근 win일 누적수익(분할 점프 영향 배제)."""
+    """이상치 제거된 일일수익률의 최근 win일 누적수익(분할 점프 영향 배제).
+    최소표본은 win에 비례(5일 모멘텀이 NaN으로 죽지 않게)."""
     tail = ret.dropna().iloc[-win:]
-    if len(tail) < max(20, win // 3):
+    need = max(3, int(win * 0.5))
+    if len(tail) < need:
         return float("nan")
     return float((1.0 + tail).prod() - 1.0)
 
