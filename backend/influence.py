@@ -29,6 +29,8 @@ _MIN_ABS_CORR = 0.15   # 의미 있는 상관 하한(2차 필터)
 _ALPHA = 0.05          # 유의수준 (p값 임계)
 _DAILY_CAP = 0.35      # 일일 수익률 이상치 컷(±35% 초과는 분할/조정으로 간주)
 _MIN_OVERLAP = 40      # 시차상관 계산 최소 공통표본
+_TRAIN_FRAC = 0.7      # 방향 적중률 백테스트 학습/검증 분할
+_VAL_MIN_OVERLAP = 120 # 검증에 필요한 최소 공통표본(학습+검증)
 
 # ---------------------------------------------------------------------------
 # 명시적 테마 구성종목 맵 — (야후심볼, 표시이름)
@@ -192,6 +194,54 @@ def _clean_momentum(ret: pd.Series, win: int = 60) -> float:
     return float((1.0 + tail).prod() - 1.0)
 
 
+def _theme_directional_hits(series: Dict[str, pd.Series], msyms: List[str]):
+    """학습 70%로 리더·시차상관 부호를 적합하고, 검증 30%에서 '리더 5일 모멘텀×상관부호'가
+    팔로워의 다음 lag일 누적수익 방향을 맞췄는지 out-of-sample로 센다.
+    반환: (hits, total)."""
+    fit = {}
+    infl = {s: 0.0 for s in msyms}
+    for i in msyms:
+        for j in msyms:
+            if i == j:
+                continue
+            idx = series[i].index.intersection(series[j].index)
+            if len(idx) < _VAL_MIN_OVERLAP:
+                continue
+            cut = int(len(idx) * _TRAIN_FRAC)
+            lag, corr, n, p = _lead_lag(series[i].reindex(idx).iloc[:cut],
+                                        series[j].reindex(idx).iloc[:cut])
+            if lag > 0 and p < _ALPHA and abs(corr) >= _MIN_ABS_CORR:
+                fit[(i, j)] = (lag, corr, idx, cut)
+                infl[i] += abs(corr)
+    if not fit or max(infl.values()) <= 0:
+        return 0, 0
+    leader = max(infl, key=lambda s: infl[s])
+    hits = total = 0
+    for j in msyms:
+        if (leader, j) not in fit:
+            continue
+        lag, corr, idx, cut = fit[(leader, j)]
+        lead = series[leader].reindex(idx).values
+        foll = series[j].reindex(idx).values
+        sign_corr = 1.0 if corr > 0 else -1.0
+        for t in range(cut, len(idx) - lag):
+            window = lead[max(0, t - 4):t + 1]
+            if len(window) < 3 or not np.all(np.isfinite(window)):
+                continue
+            move5 = float(np.prod(1.0 + window) - 1.0)
+            fut = foll[t + 1:t + 1 + lag]
+            if len(fut) < lag or not np.all(np.isfinite(fut)):
+                continue
+            fut_ret = float(np.prod(1.0 + fut) - 1.0)
+            pred = sign_corr * move5
+            if pred == 0 or fut_ret == 0:
+                continue
+            if (pred > 0) == (fut_ret > 0):
+                hits += 1
+            total += 1
+    return hits, total
+
+
 def compute(market: str) -> Dict:
     market = market.upper()
     ck = f"infl3:{market}"
@@ -208,7 +258,7 @@ def compute(market: str) -> Dict:
     syms = list(name_of.keys())
 
     try:
-        raw = yf.download(syms, period="8mo", interval="1d",
+        raw = yf.download(syms, period="1y", interval="1d",
                           auto_adjust=True, progress=False, group_by="ticker")
     except Exception as e:
         return {"error": f"데이터 다운로드 실패: {str(e)[:100]}"}
@@ -232,6 +282,8 @@ def compute(market: str) -> Dict:
     skipped_outliers = int(retDF.isna().sum().sum() - closeDF.isna().sum().sum())
 
     themes_out = []
+    val_hits = val_total = 0
+    theme_val: Dict[str, float] = {}
     for theme, members in tmap.items():
         msyms = [s for s, _ in members if s in retDF.columns]
         if len(msyms) < _MIN_MEMBERS:
@@ -240,6 +292,13 @@ def compute(market: str) -> Dict:
         msyms = [s for s in msyms if len(series[s]) >= _MIN_OVERLAP]
         if len(msyms) < _MIN_MEMBERS:
             continue
+
+        # 방향 적중률 백테스트(학습70/검증30, out-of-sample) 누적
+        _h, _t = _theme_directional_hits(series, msyms)
+        val_hits += _h
+        val_total += _t
+        if _t >= 30:
+            theme_val[theme] = round(_h / _t * 100, 1)
 
         # 모든 순서쌍 (i 리더 → j 팔로워) 시차상관 사전계산
         pair: Dict[Tuple[str, str], Tuple[int, float, int, float]] = {}
@@ -311,6 +370,13 @@ def compute(market: str) -> Dict:
             "outlierFilter": f"일일 ±{int(cap*100)}% 초과 제거",
             "skippedOutlierDays": skipped_outliers,
             "window": "8개월 일봉, 시차 1~5거래일",
+        },
+        "validation": {
+            "directionalAccuracyPct": (round(val_hits / val_total * 100, 1) if val_total else None),
+            "predictions": val_total,
+            "baselinePct": 50.0,
+            "scheme": "학습70%/검증30% 분할, 검증구간 out-of-sample 방향 적중",
+            "perThemePct": theme_val,
         },
         "disclaimer": (
             "같은 테마 안에서 '다른 종목을 가장 많이 선행 설명하는 종목'을 리더로 두고, 리더가 "
