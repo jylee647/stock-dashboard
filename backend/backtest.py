@@ -170,9 +170,9 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             # 과열 제외: MA20 대비 +25% 이상은 매수 안 함
             if a20 > 0.25:
                 continue
-            # 상대강도(RS): 지수 대비 60일 초과수익이 양(+)인 '시장 주도주'만 매수
+            # 상대강도(RS): 지수 대비 60일 초과수익이 +1.5% 이상인 '시장 주도주'만 매수
             rs = (r60 - breq) if (np.isfinite(r60) and np.isfinite(breq)) else 0.0
-            if rs <= 0:
+            if rs <= 0.015:
                 continue
             # 랭킹 점수: 상대강도 + 모멘텀 + 추세강도, 과열(15%↑) 페널티
             trend_str = m20 / m60 - 1
@@ -183,7 +183,12 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
         if not cand:
             skipped_nopick += 1
             continue
-        picks = sorted(cand, key=cand.get, reverse=True)[:top]
+        # 점수 하한(품질 바닥): 약한 구간에선 종목 수를 줄여 평균 품질을 높임 → 적중률↑
+        ranked = sorted(cand, key=cand.get, reverse=True)
+        picks = [s for s in ranked if cand[s] >= 0.08][:top]
+        if not picks:
+            skipped_nopick += 1
+            continue
 
         # (3) 목표가/손절가 청산 시뮬 (High/Low 사용)
         fwd = []
