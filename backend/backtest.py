@@ -124,6 +124,8 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     ma20 = closeDF.rolling(20).mean()
     ma60 = closeDF.rolling(60).mean()
     mom20 = closeDF.pct_change(20)                       # 20일 모멘텀
+    ret60 = closeDF.pct_change(60)                        # 60일 수익률(상대강도용)
+    benchRet60 = benchS.pct_change(60)                    # 지수 60일 수익률
     dstd = closeDF.pct_change().rolling(20).std()        # 일간 변동성(20일)
 
     dates = closeDF.index
@@ -148,12 +150,14 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             skipped_regime += 1
             continue
 
-        # (2) 추세 + 모멘텀 후보 선별
+        # (2) 추세 + 모멘텀 + 상대강도(RS) 후보 선별
+        breq = benchRet60.iloc[t]   # 지수 60일 수익률(상대강도 기준)
         cand = {}
         for s in closeDF.columns:
             price = closeDF[s].iloc[t]
             m20, m60 = ma20[s].iloc[t], ma60[s].iloc[t]
             mo = mom20[s].iloc[t]
+            r60 = ret60[s].iloc[t]
             if not (np.isfinite(price) and np.isfinite(m20) and np.isfinite(m60) and m60 > 0):
                 continue
             a20 = price / m20 - 1
@@ -166,10 +170,15 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             # 과열 제외: MA20 대비 +25% 이상은 매수 안 함
             if a20 > 0.25:
                 continue
-            # 랭킹 점수: 모멘텀 + 추세강도, 과열(15%↑) 페널티
+            # 상대강도(RS): 지수 대비 60일 초과수익이 양(+)인 '시장 주도주'만 매수
+            rs = (r60 - breq) if (np.isfinite(r60) and np.isfinite(breq)) else 0.0
+            if rs <= 0:
+                continue
+            # 랭킹 점수: 상대강도 + 모멘텀 + 추세강도, 과열(15%↑) 페널티
             trend_str = m20 / m60 - 1
-            cand[s] = (0.6 * min(mo, 0.5)
-                       + 0.4 * min(max(trend_str, 0.0), 0.3)
+            cand[s] = (0.45 * min(rs, 0.6)
+                       + 0.35 * min(mo, 0.5)
+                       + 0.20 * min(max(trend_str, 0.0), 0.3)
                        - 0.3 * max(0.0, a20 - 0.15))
         if not cand:
             skipped_nopick += 1
