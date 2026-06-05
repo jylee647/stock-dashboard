@@ -1,0 +1,12 @@
+name: keepalive
+# Render 무료 인스턴스가 잠들지 않도록 10분마다 health 엔드포인트를 호출해 깨움
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ping health
+        run: curl -fsS --max-time 60 https://stock-dashboard-vu6o.onrender.com/api/health || true
