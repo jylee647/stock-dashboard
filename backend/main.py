@@ -21,7 +21,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-from backend import auth, backtest, db, news, providers, recommend, themes  # noqa: E402
+from backend import auth, backtest, db, influence, news, providers, recommend, themes  # noqa: E402
 
 app = FastAPI(title="주식 대시보드", version="1.0")
 app.add_middleware(
@@ -229,6 +229,11 @@ def get_themes():
 @app.get("/api/backtest")
 def backtest_run(market: str = Query("US"), months: int = 6, hold: int = 20, top: int = 10):
     return backtest.run_backtest(market.upper(), months, hold, top)
+
+
+@app.get("/api/influence")
+def influence_run(market: str = Query("KR")):
+    return influence.compute(market.upper())
 
 
 @app.get("/api/search")
