@@ -1,0 +1,20 @@
+# Render 배포 청사진 (Blueprint)
+# GitHub 저장소에 이 파일이 있으면 Render가 자동으로 인식합니다.
+services:
+  - type: web
+    name: stock-dashboard
+    runtime: docker
+    plan: free            # 무료 티어 (15분 미사용 시 sleep, 첫 접속 지연)
+    region: singapore     # 한국에서 가까운 리전
+    healthCheckPath: /api/health
+    envVars:
+      - key: NAVER_CLIENT_ID
+        sync: false        # Render 대시보드에서 직접 입력 (비밀)
+      - key: NAVER_CLIENT_SECRET
+        sync: false
+      - key: KRX_ID
+        sync: false
+      - key: KRX_PW
+        sync: false
+      - key: THEMES_URL
+        sync: false

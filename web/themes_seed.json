@@ -1,0 +1,98 @@
+{
+  "generatedAt": "초기 시드 데이터 (GAS 자동화 연결 전)",
+  "crossCheckNote": "아래는 앱 동작 확인용 초기 예시입니다. GAS 자동화를 연결하면 국내·해외 뉴스를 교차검증한 실제 분석으로 자동 교체됩니다.",
+  "sources": ["시드 예시"],
+  "short": {
+    "horizons": [
+      {
+        "label": "1개월 내",
+        "themes": [
+          {
+            "theme": "AI 반도체 / HBM",
+            "summary": "데이터센터 AI 가속기 수요로 고대역폭메모리(HBM)·첨단 패키징 업황이 단기 모멘텀을 이어갈 가능성.",
+            "confidence": "중간",
+            "drivers": ["대형 클라우드 자본지출 확대", "HBM 공급 부족 지속"],
+            "stocks": {
+              "KR": [{"name": "SK하이닉스", "code": "000660", "why": "HBM 선두 공급사"}, {"name": "한미반도체", "code": "042700", "why": "HBM 본딩 장비"}],
+              "US": [{"name": "NVIDIA", "ticker": "NVDA", "why": "AI 가속기 핵심"}, {"name": "Micron", "ticker": "MU", "why": "HBM 공급 확대"}]
+            }
+          },
+          {
+            "theme": "전력 인프라 / 데이터센터 전력",
+            "summary": "AI 데이터센터 전력 수요 급증으로 변압기·전력기기·전선 단기 수주 기대.",
+            "confidence": "중간",
+            "drivers": ["데이터센터 증설", "노후 전력망 교체"],
+            "stocks": {
+              "KR": [{"name": "HD현대일렉트릭", "code": "267260", "why": "변압기 수출"}, {"name": "LS ELECTRIC", "code": "010120", "why": "전력기기"}],
+              "US": [{"name": "Vertiv", "ticker": "VRT", "why": "데이터센터 전력·냉각"}, {"name": "GE Vernova", "ticker": "GEV", "why": "발전·그리드"}]
+            }
+          }
+        ]
+      },
+      {
+        "label": "3개월 내",
+        "themes": [
+          {
+            "theme": "온디바이스 AI",
+            "summary": "스마트폰·PC 신제품 사이클과 맞물려 온디바이스 AI 반도체·부품 수요 확대 관찰.",
+            "confidence": "중간",
+            "drivers": ["AI PC/폰 출시", "엣지 추론 확산"],
+            "stocks": {
+              "KR": [{"name": "삼성전자", "code": "005930", "why": "메모리·AP·파운드리"}, {"name": "리노공업", "code": "058470", "why": "반도체 테스트 부품"}],
+              "US": [{"name": "Qualcomm", "ticker": "QCOM", "why": "온디바이스 AI SoC"}, {"name": "Arm", "ticker": "ARM", "why": "엣지 IP"}]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "long": {
+    "horizons": [
+      {
+        "label": "6개월 내",
+        "themes": [
+          {
+            "theme": "휴머노이드 로봇 / 자동화",
+            "summary": "휴머노이드·산업자동화 상용화 진전으로 액추에이터·감속기·비전 부품 수요 확대 전망.",
+            "confidence": "중간",
+            "drivers": ["공장 자동화 투자", "휴머노이드 시제품 양산화"],
+            "stocks": {
+              "KR": [{"name": "삼성전자", "code": "005930", "why": "로봇·부품 투자"}, {"name": "에스피지", "code": "058610", "why": "감속기"}],
+              "US": [{"name": "NVIDIA", "ticker": "NVDA", "why": "로봇 AI 플랫폼"}, {"name": "Tesla", "ticker": "TSLA", "why": "옵티머스"}]
+            }
+          }
+        ]
+      },
+      {
+        "label": "1년 내",
+        "themes": [
+          {
+            "theme": "차세대 배터리 (전고체)",
+            "summary": "전고체·고에너지밀도 배터리 파일럿 라인 가시화로 소재·장비 장기 모멘텀.",
+            "confidence": "낮음",
+            "drivers": ["전고체 양산 로드맵", "전기차 수요 회복 여부"],
+            "stocks": {
+              "KR": [{"name": "삼성SDI", "code": "006400", "why": "전고체 개발"}, {"name": "에코프로비엠", "code": "247540", "why": "양극재"}],
+              "US": [{"name": "QuantumScape", "ticker": "QS", "why": "전고체"}, {"name": "Albemarle", "ticker": "ALB", "why": "리튬"}]
+            }
+          }
+        ]
+      },
+      {
+        "label": "1년 이상",
+        "themes": [
+          {
+            "theme": "양자컴퓨팅",
+            "summary": "오류정정·실용 알고리즘 진전에 따라 중장기 테마로 부상 가능하나 변동성·불확실성 큼.",
+            "confidence": "낮음",
+            "drivers": ["오류정정 큐비트 진전", "정부·빅테크 투자"],
+            "stocks": {
+              "KR": [{"name": "현대차", "code": "005380", "why": "양자 응용 연구 협력"}],
+              "US": [{"name": "IonQ", "ticker": "IONQ", "why": "트랩이온 양자"}, {"name": "Rigetti", "ticker": "RGTI", "why": "초전도 양자"}]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
