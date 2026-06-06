@@ -1,15 +1,22 @@
 """
-백테스트(재설계 v2) — '지금 사면 좋은 종목' 추천 + 그 방식의 과거 적중률 검증.
-- 상단: 이 선정 방식이 과거 N개월간 적중률 X%, 평균수익 +Y% (지수 대비)
+백테스트(재설계 v3) — '지금 사면 좋은 종목' 추천 + 그 방식의 과거 적중률·리스크 검증.
+- 상단: 이 선정 방식이 과거 N개월간 적중률 X%, 평균수익 +Y% (지수 대비), 최대낙폭·손익비 포함
 - 본문: 오늘의 추천 종목 리스트 = 추천엔진 결과 + 목표가/손절가/보유기간
 
-[v2 개선 — 적중률 정직하게 +로 끌어올리기]
+[정직성 원칙 — v3]
+ - 단기 방향 예측은 out-of-sample로 동전던지기(≈50%)임이 자체 백테스트로 확인됨.
+   따라서 '승률'은 '예측 실력'이 아니라 '상승장 국면 필터 + 추세·품질 선별 + 손절 규칙'의
+   결합 결과(상승장 조건부 승률)임을 분명히 표기한다. 진짜 판단 기준은 '지수 대비 초과수익'과
+   '최대낙폭(MDD)'이다.
+ - winRate/avgReturn 은 부풀리지 않고 실측값 그대로 표기.
+ - 리스크 관리: 변동성 기반 비중조절(인버스-볼) + 목표가/손절가 청산으로 낙폭을 통제.
+
+[규칙]
  1) 시장 국면 필터: 지수(^GSPC/^KS11)가 60일선 위일 때만 신규 매수, 하락장은 현금 보유(스킵).
- 2) 추세 필터: price>MA20 and MA20>MA60(상승추세) + 20일 모멘텀 양호만 선택, 과열(>MA20 +25%) 제외.
- 3) 목표가/손절가 청산 시뮬: 보유기간 내 고가가 목표가 도달=익절, 저가가 손절가 도달=손절,
-    둘 다 아니면 종가수익률. (yf.download에서 High/Low 추출.)
- 4) 목표/손절은 변동성(일간표준편차×√기간) 기반. 보상:위험 = 2.0 : 1.6 으로 승률↑·기대수익 양수 균형.
- 5) winRate/avgReturn 은 부풀리지 않고 실측값 그대로 표기.
+ 2) 추세 필터: price>MA20>MA60 + 20일 모멘텀 양호만 선택, 과열(>MA20 +25%) 제외.
+ 3) 상대강도(RS): 지수 대비 60일 초과수익이 양(+)인 주도주만 매수.
+ 4) 목표가/손절가 청산: 변동성(일간표준편차×√기간) 밴드 기반, 보상:위험 = 2.0:1.6.
+ 5) 비중조절: 변동성이 큰 종목일수록 작게(인버스-볼) 담아 포트폴리오 낙폭을 낮춘다.
 
 ※ 뉴스는 과거 재현이 불가해 '과거 적중률'은 가격지표 기반 재현 검증값입니다.
 ※ 투자 자문이 아니며 미래 수익을 보장하지 않습니다.
@@ -31,9 +38,8 @@ _BENCH = {"KR": "^KS11", "US": "^GSPC"}
 _BENCH_NAME = {"KR": "코스피", "US": "S&P 500"}
 _HOLD_LABEL = {5: "1주", 20: "1달", 60: "3달"}
 
-# 목표/손절 배수 (변동성 밴드 기준) — 보상:위험 비대칭으로 기대수익 양수 유도
-_TP_MULT = 0.9   # 목표가 = entry * (1 + 0.9 * band)  [v7]
-_SL_MULT = 1.2   # 손절가 = entry * (1 - 1.2 * band)  [손익분기 승률 ~57%]
+_TP_MULT = 2.0
+_SL_MULT = 1.6
 
 
 def _universe(market: str) -> Dict[str, str]:
@@ -50,13 +56,26 @@ def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
     return (100 - 100 / (1 + rs)).fillna(100)
 
 
-# ===========================================================================
+def _max_drawdown(curve: List[float]) -> float:
+    """자본곡선(1.0 시작)에서 최대낙폭(%) — 양수로 반환(예: 12.3 = -12.3% 낙폭)."""
+    peak = -1e9
+    mdd = 0.0
+    for v in curve:
+        if v > peak:
+            peak = v
+        if peak > 0:
+            dd = (v / peak) - 1.0
+            if dd < mdd:
+                mdd = dd
+    return round(-mdd * 100, 2)
+
+
 def run_backtest(market: str, months: int = 6, hold: int = 20, top: int = 10) -> Dict:
     market = market.upper()
     months = max(1, min(int(months), 18))
     hold = max(5, min(int(hold), 60))
     top = max(1, min(int(top), 15))
-    ck = f"bt3:{market}:{months}:{hold}:{top}"
+    ck = f"bt4:{market}:{months}:{hold}:{top}"
     c = _CACHE.get(ck)
     if c and time.time() - c[0] < 900:
         return c[1]
@@ -69,25 +88,27 @@ def run_backtest(market: str, months: int = 6, hold: int = 20, top: int = 10) ->
         "holdLabel": _HOLD_LABEL.get(hold, f"{hold}거래일"),
         "validation": validation,
         "picks": picks,
+        "honestNote": (
+            "‘승률’은 예측 실력이 아니라 ‘상승장 국면에서만 진입 + 추세·품질 선별 + 손절 규칙’이 "
+            "결합된 결과입니다(상승장 조건부). 단기 방향 자체는 예측하기 어렵습니다. 실제 판단 기준은 "
+            "‘지수 대비 초과수익(excessReturn)’과 ‘최대낙폭(maxDrawdown)’입니다 — 초과수익이 0 근처거나 "
+            "음수면, 그냥 지수를 사는 편이 낫다는 뜻입니다."
+        ),
         "disclaimer": (
-            "‘과거 적중률’은 동일한 규칙(시장국면 필터 + 상승추세·모멘텀 선별 + 목표가/손절가 청산)으로 "
-            "과거를 재현해 검증한 값입니다. 하락장에서는 신규 매수를 건너뛰므로(현금 보유) 지수와 단순 비교가 "
-            "어려울 수 있고, 뉴스 등 일부 요소는 과거 재현이 불가해 제외했습니다. 목표가·손절가는 최근 변동성 "
-            "기반 참고치입니다. 투자 자문이 아니며 미래 수익을 보장하지 않습니다."
+            "‘과거 적중률’은 동일한 규칙(시장국면 필터 + 상승추세·모멘텀·상대강도 선별 + 목표가/손절가 청산 "
+            "+ 변동성 비중조절)으로 과거를 재현해 검증한 값입니다. 하락장에서는 신규 매수를 건너뛰므로(현금 보유) "
+            "지수와 단순 비교가 어려울 수 있고, 뉴스 등 일부 요소는 과거 재현이 불가해 제외했습니다. "
+            "목표가·손절가는 최근 변동성 기반 참고치입니다. 투자 자문이 아니며 미래 수익을 보장하지 않습니다."
         ),
     }
     _CACHE[ck] = (time.time(), out)
     return out
 
 
-# ===========================================================================
-# 과거 적중률 검증 (규칙 기반 재현)
-# ===========================================================================
 def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     uni = _universe(market)
     syms = list(uni.keys())
     bench = _BENCH[market]
-    # MA60 + 지수 60일선 워밍업(약 3개월) + 보유기간 여유를 위해 버퍼 확보
     period = f"{months + 5}mo"
     try:
         raw = yf.download(syms + [bench], period=period, interval="1d",
@@ -95,7 +116,6 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     except Exception as e:
         return {"error": f"데이터 다운로드 실패: {str(e)[:100]}"}
 
-    # --- OHLCV 추출 (Close/Volume + High/Low) ---
     close, high, low, vol = {}, {}, {}, {}
     for s in syms:
         try:
@@ -120,13 +140,12 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
         benchS = closeDF.mean(axis=1)
     benchMA60 = benchS.rolling(60).mean()
 
-    # --- 지표 ---
     ma20 = closeDF.rolling(20).mean()
     ma60 = closeDF.rolling(60).mean()
-    mom20 = closeDF.pct_change(20)                       # 20일 모멘텀
-    ret60 = closeDF.pct_change(60)                        # 60일 수익률(상대강도용)
-    benchRet60 = benchS.pct_change(60)                    # 지수 60일 수익률
-    dstd = closeDF.pct_change().rolling(20).std()        # 일간 변동성(20일)
+    mom20 = closeDF.pct_change(20)
+    ret60 = closeDF.pct_change(60)
+    benchRet60 = benchS.pct_change(60)
+    dstd = closeDF.pct_change().rolling(20).std()
 
     dates = closeDF.index
     warm = 60
@@ -137,21 +156,22 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     pick_rets: List[float] = []
     bench_rets: List[float] = []
     equity = 1.0
-    skipped_regime = 0       # 하락장으로 스킵한 리밸런싱 수
-    skipped_nopick = 0       # 조건 충족 종목이 없어 스킵한 수
-    exit_tp = 0              # 목표가 청산 건수
-    exit_sl = 0              # 손절가 청산 건수
-    exit_time = 0           # 만기 종가 청산 건수
+    equity_curve: List[float] = [1.0]
+    bench_equity = 1.0
+    bench_curve: List[float] = [1.0]
+    skipped_regime = 0
+    skipped_nopick = 0
+    exit_tp = 0
+    exit_sl = 0
+    exit_time = 0
 
     for t in rebal:
-        # (1) 시장 국면 필터: 지수가 60일선 위일 때만 신규 매수
         bpx, bma = benchS.iloc[t], benchMA60.iloc[t]
         if np.isfinite(bpx) and np.isfinite(bma) and bpx < bma:
             skipped_regime += 1
             continue
 
-        # (2) 추세 + 모멘텀 + 상대강도(RS) 후보 선별
-        breq = benchRet60.iloc[t]   # 지수 60일 수익률(상대강도 기준)
+        breq = benchRet60.iloc[t]
         cand = {}
         for s in closeDF.columns:
             price = closeDF[s].iloc[t]
@@ -161,20 +181,15 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             if not (np.isfinite(price) and np.isfinite(m20) and np.isfinite(m60) and m60 > 0):
                 continue
             a20 = price / m20 - 1
-            # 상승추세 정렬: price > MA20 > MA60
             if not (price > m20 and m20 > m60):
                 continue
-            # 모멘텀 양호(20일 수익률 +)
             if not (np.isfinite(mo) and mo > 0):
                 continue
-            # 과열 제외: MA20 대비 +25% 이상은 매수 안 함
             if a20 > 0.25:
                 continue
-            # 상대강도(RS): 지수 대비 60일 초과수익이 +1.5% 이상인 '시장 주도주'만 매수
             rs = (r60 - breq) if (np.isfinite(r60) and np.isfinite(breq)) else 0.0
-            if rs <= 0.025:
+            if rs <= 0:
                 continue
-            # 랭킹 점수: 상대강도 + 모멘텀 + 추세강도, 과열(15%↑) 페널티
             trend_str = m20 / m60 - 1
             cand[s] = (0.45 * min(rs, 0.6)
                        + 0.35 * min(mo, 0.5)
@@ -183,22 +198,16 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
         if not cand:
             skipped_nopick += 1
             continue
-        # 점수 하한(품질 바닥): 약한 구간에선 종목 수를 줄여 평균 품질을 높임 → 적중률↑
-        ranked = sorted(cand, key=cand.get, reverse=True)
-        picks = [s for s in ranked if cand[s] >= 0.13][:top]
-        if not picks:
-            skipped_nopick += 1
-            continue
+        picks = sorted(cand, key=cand.get, reverse=True)[:top]
 
-        # (3) 목표가/손절가 청산 시뮬 (High/Low 사용)
         fwd = []
+        weights = []
         for s in picks:
             entry = closeDF[s].iloc[t]
             v = dstd[s].iloc[t]
             if not (np.isfinite(entry) and entry > 0):
                 continue
             v = v if (np.isfinite(v) and v > 0) else 0.02
-            # (4) 변동성(일간표준편차 × √보유기간) 기반 밴드, 3%~30%로 제한
             band = max(0.03, min(v * math.sqrt(hold), 0.30))
             target = entry * (1 + _TP_MULT * band)
             stop = entry * (1 - _SL_MULT * band)
@@ -206,7 +215,6 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             for k in range(1, hold + 1):
                 hi = highDF[s].iloc[t + k]
                 lo = lowDF[s].iloc[t + k]
-                # 보수적: 같은 날 손절·익절 동시 도달 시 손절을 먼저 적용
                 if np.isfinite(lo) and lo <= stop:
                     ret = stop / entry - 1
                     exit_sl += 1
@@ -222,32 +230,55 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
                 ret = p1 / entry - 1
                 exit_time += 1
             fwd.append(ret)
+            weights.append(1.0 / band)
         if not fwd:
             skipped_nopick += 1
             continue
 
         pick_rets.extend(fwd)
-        equity *= (1 + float(np.mean(fwd)))
-        # 벤치마크는 '실제로 매수한' 구간만 비교(현금구간 제외 → 공정 비교)
+        w = np.array(weights, dtype=float)
+        w = w / w.sum() if w.sum() > 0 else np.ones(len(fwd)) / len(fwd)
+        port_ret = float(np.dot(w, np.array(fwd, dtype=float)))
+        equity *= (1 + port_ret)
+        equity_curve.append(equity)
         b0, b1 = benchS.iloc[t], benchS.iloc[t + hold]
         if np.isfinite(b0) and np.isfinite(b1) and b0 > 0:
-            bench_rets.append(b1 / b0 - 1)
+            br = b1 / b0 - 1
+            bench_rets.append(br)
+            bench_equity *= (1 + br)
+            bench_curve.append(bench_equity)
 
     n = len(pick_rets)
     if n == 0:
         return {"error": "조건을 만족하는 매수 시점이 없었습니다(추세 약함/하락장). 기간·종목을 조정해 보세요."}
-    wins = sum(1 for x in pick_rets if x > 0)
+    wins = [x for x in pick_rets if x > 0]
+    losses = [x for x in pick_rets if x < 0]
+    avg_win = float(np.mean(wins)) if wins else 0.0
+    avg_loss = float(np.mean(losses)) if losses else 0.0
+    payoff = round(avg_win / abs(avg_loss), 2) if losses and avg_loss != 0 else None
+    gross_win = sum(wins)
+    gross_loss = abs(sum(losses))
+    profit_factor = round(gross_win / gross_loss, 2) if gross_loss > 0 else None
+
+    strat_total = round((equity - 1) * 100, 2)
+    bench_total = round((float(np.prod([1 + b for b in bench_rets])) - 1) * 100, 2) if bench_rets else 0.0
     return {
-        "winRate": round(wins / n * 100, 1),
+        "winRate": round(len(wins) / n * 100, 1),
         "avgReturn": round(float(np.mean(pick_rets)) * 100, 2),
         "trades": n,
         "rebalances": len(rebal),
-        "stratTotal": round((equity - 1) * 100, 2),
-        "benchReturn": round((float(np.prod([1 + b for b in bench_rets])) - 1) * 100, 2) if bench_rets else 0.0,
+        "stratTotal": strat_total,
+        "benchReturn": bench_total,
+        "excessReturn": round(strat_total - bench_total, 2),
+        "maxDrawdownPct": _max_drawdown(equity_curve),
+        "benchMaxDrawdownPct": _max_drawdown(bench_curve),
+        "payoffRatio": payoff,
+        "profitFactor": profit_factor,
+        "avgWinPct": round(avg_win * 100, 2),
+        "avgLossPct": round(avg_loss * 100, 2),
         "benchName": _BENCH_NAME[market],
         "bestTrade": round(max(pick_rets) * 100, 2),
         "worstTrade": round(min(pick_rets) * 100, 2),
-        # 참고용(프론트 비표시 가능) — 규칙 동작 투명성
         "tradedRebalances": len(bench_rets),
         "skippedDownMarket": skipped_regime,
         "skippedNoPick": skipped_nopick,
@@ -257,9 +288,6 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     }
 
 
-# ===========================================================================
-# 오늘의 추천 종목 (추천엔진 + 목표가/손절가/보유기간)
-# ===========================================================================
 def _today_picks(market: str, hold: int, top: int) -> List[Dict]:
     try:
         reco = recommend.recommend(market, top).get("items", [])
@@ -280,8 +308,7 @@ def _today_picks(market: str, hold: int, top: int) -> List[Dict]:
                     move = dvol * math.sqrt(hold)
         except Exception:
             pass
-        move = max(0.03, min(move, 0.30))  # 변동성 밴드: 3%~30% (검증 로직과 동일)
-        # 검증 로직과 동일한 보상:위험 비대칭 적용
+        move = max(0.03, min(move, 0.30))
         target = round(price * (1 + _TP_MULT * move), 2) if price else None
         stop = round(price * (1 - _SL_MULT * move), 2) if price else None
         out.append({
