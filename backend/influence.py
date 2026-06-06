@@ -242,6 +242,68 @@ def _theme_directional_hits(series: Dict[str, pd.Series], msyms: List[str]):
     return hits, total
 
 
+def _sign(x: float) -> float:
+    if not np.isfinite(x) or x == 0:
+        return 0.0
+    return 1.0 if x > 0 else -1.0
+
+
+def _hypothesis_tests(retDF: pd.DataFrame, tmap, k: int = 5, m: int = 5) -> Dict:
+    """여러 단순 종목간 신호의 out-of-sample 방향 적중률을 한 번에 측정.
+    모두 무수정 규칙(파라미터 적합 없음)이라 검증구간 전체에서 평가.
+    H1 테마평균회귀 / H2 테마모멘텀추종 / H3 1일반전 / H4 5일모멘텀지속."""
+    acc = {h: [0, 0] for h in ("H1_meanRevert", "H2_themeMomentum",
+                               "H3_reversal1d", "H4_momentum5d")}
+    for theme, members in tmap.items():
+        msyms = [s for s, _ in members if s in retDF.columns]
+        if len(msyms) < _MIN_MEMBERS:
+            continue
+        sub = retDF[msyms].dropna(how="all")
+        if len(sub) < _VAL_MIN_OVERLAP:
+            continue
+        theme_avg = sub.mean(axis=1)
+        cut = int(len(sub) * _TRAIN_FRAC)  # H0와 동일한 검증구간만 평가
+        R = sub.values
+        TA = theme_avg.values
+        n = len(sub)
+        for ci, s in enumerate(msyms):
+            col = R[:, ci]
+            for t in range(max(cut, k), n - m):
+                win = col[t - k + 1:t + 1]
+                if not np.all(np.isfinite(win)):
+                    continue
+                memb_cum = float(np.prod(1.0 + win) - 1.0)
+                twin = TA[t - k + 1:t + 1]
+                if not np.all(np.isfinite(twin)):
+                    continue
+                theme_cum = float(np.prod(1.0 + twin) - 1.0)
+                fut = col[t + 1:t + 1 + m]
+                if len(fut) < m or not np.all(np.isfinite(fut)):
+                    continue
+                fut_ret = float(np.prod(1.0 + fut) - 1.0)
+                a5 = _sign(fut_ret)
+                if a5 != 0:
+                    rs = memb_cum - theme_cum
+                    p1 = -_sign(rs)
+                    if p1 != 0:
+                        acc["H1_meanRevert"][0] += (p1 == a5); acc["H1_meanRevert"][1] += 1
+                    p2 = _sign(theme_cum)
+                    if p2 != 0:
+                        acc["H2_themeMomentum"][0] += (p2 == a5); acc["H2_themeMomentum"][1] += 1
+                    p4 = _sign(memb_cum)
+                    if p4 != 0:
+                        acc["H4_momentum5d"][0] += (p4 == a5); acc["H4_momentum5d"][1] += 1
+                # H3: 1일 반전 (다음날 방향)
+                a1 = _sign(col[t + 1]) if np.isfinite(col[t + 1]) else 0.0
+                p3 = -_sign(col[t])
+                if a1 != 0 and p3 != 0:
+                    acc["H3_reversal1d"][0] += (p3 == a1); acc["H3_reversal1d"][1] += 1
+    out = {}
+    for h, (hit, tot) in acc.items():
+        out[h] = {"accPct": (round(hit / tot * 100, 1) if tot else None), "n": tot}
+    return out
+
+
 def compute(market: str) -> Dict:
     market = market.upper()
     ck = f"infl3:{market}"
@@ -369,7 +431,7 @@ def compute(market: str) -> Dict:
             "significance": f"양측 p<{_ALPHA}, |corr|>={_MIN_ABS_CORR}",
             "outlierFilter": f"일일 ±{int(cap*100)}% 초과 제거",
             "skippedOutlierDays": skipped_outliers,
-            "window": "8개월 일봉, 시차 1~5거래일",
+            "window": "1년 일봉, 시차 1~5거래일",
         },
         "validation": {
             "directionalAccuracyPct": (round(val_hits / val_total * 100, 1) if val_total else None),
@@ -378,6 +440,7 @@ def compute(market: str) -> Dict:
             "scheme": "학습70%/검증30% 분할, 검증구간 out-of-sample 방향 적중",
             "perThemePct": theme_val,
         },
+        "hypotheses": _hypothesis_tests(retDF, tmap),
         "disclaimer": (
             "같은 테마 안에서 '다른 종목을 가장 많이 선행 설명하는 종목'을 리더로 두고, 리더가 "
             "며칠 뒤 팔로워를 어느 방향으로 움직였는지를 과거 8개월 시차 상관으로 계산해 통계적으로 "
