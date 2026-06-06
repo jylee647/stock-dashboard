@@ -175,19 +175,26 @@ async function runBacktest() {
     } else {
       $("#btMsg").textContent = `과거 ${d.months}개월 동안 ${v.rebalances}회 리밸런싱 · ${v.trades}건 거래로 검증`;
       const wr = v.winRate, cls = wr >= 50 ? "up" : "down";
+      const exc = v.excessReturn, excCls = exc > 0 ? "up" : exc < 0 ? "down" : "muted";
+      const mddRisk = (v.maxDrawdownPct != null && v.benchMaxDrawdownPct != null && v.maxDrawdownPct > v.benchMaxDrawdownPct);
+      const fmtP = (x) => (x == null ? "-" : (x > 0 ? "+" : "") + x + "%");
       $("#btValidation").innerHTML = `
         <div class="bt-summary">
           <div class="bt-sum-main">
-            <div class="bt-sum-label">이 방식의 과거 적중률</div>
+            <div class="bt-sum-label">상승장 조건부 승률</div>
             <div class="bt-sum-rate ${cls}">${wr}%</div>
             <div class="bt-sum-sub">건당 평균수익 <b class="${chgClass(v.avgReturn)}">${v.avgReturn > 0 ? "+" : ""}${v.avgReturn}%</b> · ${d.holdLabel} 보유 기준</div>
           </div>
           <div class="bt-sum-stats">
-            <div><span>전략 누적</span><b class="${chgClass(v.stratTotal)}">${v.stratTotal > 0 ? "+" : ""}${v.stratTotal}%</b></div>
-            <div><span>${v.benchName}</span><b class="${chgClass(v.benchReturn)}">${v.benchReturn > 0 ? "+" : ""}${v.benchReturn}%</b></div>
+            <div><span>전략 누적</span><b class="${chgClass(v.stratTotal)}">${fmtP(v.stratTotal)}</b></div>
+            <div><span>${v.benchName}</span><b class="${chgClass(v.benchReturn)}">${fmtP(v.benchReturn)}</b></div>
+            <div><span>지수 대비 초과</span><b class="${excCls}">${fmtP(exc)}</b></div>
+            <div><span>최대낙폭 전략/지수</span><b class="${mddRisk ? "down" : ""}">-${v.maxDrawdownPct}% / -${v.benchMaxDrawdownPct}%</b></div>
+            <div><span>손익비 / PF</span><b>${v.payoffRatio != null ? v.payoffRatio : "-"} / ${v.profitFactor != null ? v.profitFactor : "-"}</b></div>
             <div><span>최고 / 최저</span><b>${v.bestTrade > 0 ? "+" : ""}${v.bestTrade}% / ${v.worstTrade}%</b></div>
           </div>
-        </div>`;
+        </div>
+        ${d.honestNote ? `<div class="bt-honest" style="margin-top:10px;padding:10px 12px;background:#fff8e1;border:1px solid #ffe0a3;border-radius:8px;font-size:12.5px;line-height:1.5;color:#6b5a2e">⚖️ ${d.honestNote}</div>` : ""}`;
     }
     const picks = d.picks || [];
     if (picks.length) {
