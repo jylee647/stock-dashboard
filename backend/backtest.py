@@ -36,7 +36,7 @@ from backend import providers, recommend, signals
 _CACHE: Dict[str, tuple] = {}
 _BENCH = {"KR": "^KS11", "US": "^GSPC"}
 _BENCH_NAME = {"KR": "코스피", "US": "S&P 500"}
-_HOLD_LABEL = {5: "1주", 20: "1달", 60: "3달"}
+_HOLD_LABEL = {5: "1주", 20: "1달", 42: "2달", 60: "3달"}
 
 _TP_MULT = 2.0
 _SL_MULT = 1.6
@@ -70,9 +70,9 @@ def _max_drawdown(curve: List[float]) -> float:
     return round(-mdd * 100, 2)
 
 
-def run_backtest(market: str, months: int = 6, hold: int = 20, top: int = 10) -> Dict:
+def run_backtest(market: str, months: int = 24, hold: int = 42, top: int = 10) -> Dict:
     market = market.upper()
-    months = max(1, min(int(months), 18))
+    months = max(1, min(int(months), 36))
     hold = max(5, min(int(hold), 60))
     top = max(1, min(int(top), 15))
     ck = f"bt4:{market}:{months}:{hold}:{top}"
