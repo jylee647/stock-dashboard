@@ -40,6 +40,7 @@ _HOLD_LABEL = {5: "1주", 20: "1달", 42: "2달", 60: "3달"}
 
 _TP_MULT = 2.0
 _SL_MULT = 1.6
+_BE_TRIGGER_MULT = 1.0  # +1.0xband 도달 시 SL을 진입가(BE)로 이동
 
 
 def _universe(market: str) -> Dict[str, str]:
@@ -54,6 +55,14 @@ def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
     loss = (-d.clip(upper=0)).rolling(n).mean()
     rs = gain / loss.replace(0, np.nan)
     return (100 - 100 / (1 + rs)).fillna(100)
+
+
+def _macd(close: pd.Series, fast: int = 12, slow: int = 26, sig: int = 9) -> pd.Series:
+    ema_fast = close.ewm(span=fast, adjust=False).mean()
+    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    macd = ema_fast - ema_slow
+    signal = macd.ewm(span=sig, adjust=False).mean()
+    return macd - signal  # MACD 히스토그램
 
 
 def _max_drawdown(curve: List[float]) -> float:
@@ -109,7 +118,7 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     uni = _universe(market)
     syms = list(uni.keys())
     bench = _BENCH[market]
-    period = f"{months + 5}mo"
+    period = f"{months + 12}mo"
     try:
         raw = yf.download(syms + [bench], period=period, interval="1d",
                           auto_adjust=True, progress=False, group_by="ticker")
@@ -139,16 +148,19 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     except Exception:
         benchS = closeDF.mean(axis=1)
     benchMA60 = benchS.rolling(60).mean()
+    benchMA200 = benchS.rolling(200).mean()
 
     ma20 = closeDF.rolling(20).mean()
     ma60 = closeDF.rolling(60).mean()
+    ma200 = closeDF.rolling(200).mean()
     mom20 = closeDF.pct_change(20)
     ret60 = closeDF.pct_change(60)
     benchRet60 = benchS.pct_change(60)
     dstd = closeDF.pct_change().rolling(20).std()
+    rsiDF = closeDF.apply(lambda c: _rsi(c, 14))
 
     dates = closeDF.index
-    warm = 60
+    warm = 200
     if len(dates) <= warm + hold + 1:
         return {"error": "기간이 짧습니다. 개월 수를 늘려보세요."}
 
@@ -167,7 +179,9 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
 
     for t in rebal:
         bpx, bma = benchS.iloc[t], benchMA60.iloc[t]
-        if np.isfinite(bpx) and np.isfinite(bma) and bpx < bma:
+        bma200 = benchMA200.iloc[t]
+        if not (np.isfinite(bpx) and np.isfinite(bma) and np.isfinite(bma200)
+                and bpx > bma and bpx > bma200):
             skipped_regime += 1
             continue
 
@@ -176,16 +190,21 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
         for s in closeDF.columns:
             price = closeDF[s].iloc[t]
             m20, m60 = ma20[s].iloc[t], ma60[s].iloc[t]
+            m200 = ma200[s].iloc[t]
             mo = mom20[s].iloc[t]
             r60 = ret60[s].iloc[t]
-            if not (np.isfinite(price) and np.isfinite(m20) and np.isfinite(m60) and m60 > 0):
+            if not (np.isfinite(price) and np.isfinite(m20) and np.isfinite(m60)
+                    and np.isfinite(m200) and m60 > 0 and m200 > 0):
                 continue
             a20 = price / m20 - 1
-            if not (price > m20 and m20 > m60):
+            if not (price > m20 and m20 > m60 and m60 > m200):
                 continue
             if not (np.isfinite(mo) and mo > 0):
                 continue
             if a20 > 0.25:
+                continue
+            rsi_v = rsiDF[s].iloc[t]
+            if np.isfinite(rsi_v) and rsi_v > 70:
                 continue
             rs = (r60 - breq) if (np.isfinite(r60) and np.isfinite(breq)) else 0.0
             if rs <= 0:
@@ -211,6 +230,8 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
             band = max(0.03, min(v * math.sqrt(hold), 0.30))
             target = entry * (1 + _TP_MULT * band)
             stop = entry * (1 - _SL_MULT * band)
+            be_trigger = entry * (1 + _BE_TRIGGER_MULT * band)
+            be_armed = False
             ret = None
             for k in range(1, hold + 1):
                 hi = highDF[s].iloc[t + k]
@@ -223,6 +244,9 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
                     ret = target / entry - 1
                     exit_tp += 1
                     break
+                if (not be_armed) and np.isfinite(hi) and hi >= be_trigger:
+                    stop = entry
+                    be_armed = True
             if ret is None:
                 p1 = closeDF[s].iloc[t + hold]
                 if not (np.isfinite(p1) and p1 > 0):
@@ -319,4 +343,4 @@ def _today_picks(market: str, hold: int, top: int) -> List[Dict]:
             "targetPct": round(_TP_MULT * move * 100, 1), "stopPct": round(_SL_MULT * move * 100, 1),
             "holdLabel": _HOLD_LABEL.get(hold, f"{hold}거래일"),
         })
-    return out
+   
