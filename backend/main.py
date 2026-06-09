@@ -87,6 +87,16 @@ async def _auth_mw(request: Request, call_next):
     return FileResponse(WEB_DIR / "login.html")
 
 
+@app.middleware("http")
+async def _no_cache_static(request: Request, call_next):
+    """정적 자산/HTML을 항상 재검증(no-cache) -> 배포 즉시 모든 기기에 반영."""
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/" or p.startswith("/static") or p.endswith((".html", ".js", ".css")):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
 class Credentials(BaseModel):
     username: str
     password: str
