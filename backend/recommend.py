@@ -200,8 +200,28 @@ WSPEC = [
 ]
 
 
+_BENCH_SYM = {"KR": "^KS11", "US": "^GSPC"}
+
+
+def _bench_ret60(market: str) -> float:
+    """지수(^KS11/^GSPC)의 60거래일 수익률 — 상대강도(RS) 기준."""
+    try:
+        d = signals.get_daily(_BENCH_SYM[market], days=260)
+        c = d["close"] if d else []
+        if len(c) >= 61 and c[-61]:
+            return c[-1] / c[-61] - 1
+    except Exception:
+        pass
+    return 0.0
+
+
 def recommend(market: str, limit: int = 10) -> Dict:
-    ck = f"reco2:{market}:{limit}"
+    """추천 = #강세(백테스트 종목필터 정합) + #반등(과매도 저평가), 구분 태그.
+    - #강세: price>MA20>MA60>MA200, 모멘텀+, 과열X, RSI<=70, 지수대비 RS>0 (시장국면 게이트는 제외 -> 하락장에도 표시)
+    - #반등: RSI<=35, 60일선 하회, 구조 유지(MA200*0.8 위)
+    - 2단계 처리: 가격게이트 먼저 -> 통과 종목만 뉴스/테마태그 (부하 절감)
+    """
+    ck = f"reco3:{market}:{limit}"
     cached = _cache_get(ck, ttl=300)
     if cached:
         return cached
@@ -216,87 +236,118 @@ def recommend(market: str, limit: int = 10) -> Dict:
             market_trend = sum(pcts) / len(pcts)
     except Exception:
         pass
-    trend_norm = (max(min(market_trend, 3), -3) / 3 * 100 + 100) / 2  # 0~100 공통
 
-    def _process(c):
-        daily = signals.get_daily(c["yahooSym"])
+    bench_ret60 = _bench_ret60(market)
+
+    # 1단계: 가격/지표 게이트 (뉴스 미조회)
+    def _screen(c):
+        daily = signals.get_daily(c["yahooSym"], days=260)
         if not daily:
             return None
-        ind = signals.indicators(daily, c.get("price"), c.get("changePct"), market)
-        nitems = []
-        try:
-            nitems = news_mod.get_stock_news(c["symbol"], market, c.get("name", ""), limit=5)
-            sent, nvol = _score_news(nitems)
-        except Exception:
-            sent, nvol = 0.0, 0
-        newstext = " ".join(((n.get("title") or "") + " " + (n.get("summary") or "")) for n in nitems)
-        tags = _theme_tags(newstext, c.get("name", ""))
-        # 진입여력
-        entry = ind["room"]
-        if ind["limitLocked"]:
-            entry *= 0.15
-        elif ind["overheatedToday"]:
-            entry *= 0.5
-        # 추세건전성: +5% 부근 최고, 과열(+30%)·급락(-20%)서 0
-        a = ind["aboveMa20"] or 0.0
-        trend = max(0.0, 1 - abs(a - 0.05) / 0.25)
-        if a < -0.15:
-            trend *= 0.6
-        # 저평가: RSI 낮고 60일선 아래일수록 큼
-        rsi = ind["rsi"] if ind["rsi"] is not None else 50.0
-        value = 0.6 * max(0.0, (55 - rsi) / 55) + 0.4 * min(max(0.0, -(ind["aboveMa60"] or 0.0)) / 0.20, 1.0)
-        # 거래량·관심도
-        interest = 0.6 * min((ind["volSurge"] or 1.0) / 3.0, 1.0) + 0.4 * min(nvol / 8.0, 1.0)
+        closes = daily["close"]
+        if len(closes) < 60:
+            return None
+        price = c.get("price") or closes[-1]
+        if not price:
+            return None
+        ma20 = signals._ma(closes, 20)
+        ma60 = signals._ma(closes, 60)
+        ma200 = signals._ma(closes, 200)
+        rsi = signals._rsi(closes, 14)
+        rsi = rsi if rsi is not None else 50.0
+        mom20 = (closes[-1] / closes[-21] - 1) if (len(closes) >= 21 and closes[-21]) else 0.0
+        ret60 = (closes[-1] / closes[-61] - 1) if (len(closes) >= 61 and closes[-61]) else 0.0
+        a20 = (price / ma20 - 1) if ma20 else 0.0
+        rs = ret60 - bench_ret60
+
+        sig = None
+        score = 0.0
+        comps = []
+        reason = ""
+        # #강세 — 백테스트 종목필터와 동일 (시장국면 게이트 제외)
+        if (ma20 and ma60 and ma200 and price > ma20 > ma60 > ma200
+                and mom20 > 0 and a20 <= 0.25 and rsi <= 70 and rs > 0):
+            sig = "강세"
+            trend_str = ma20 / ma60 - 1
+            rs_n = min(max(rs, 0.0), 0.6) / 0.6 * 100
+            mom_n = min(max(mom20, 0.0), 0.5) / 0.5 * 100
+            tr_n = min(max(trend_str, 0.0), 0.3) / 0.3 * 100
+            score = round(0.45 * rs_n + 0.35 * mom_n + 0.20 * tr_n, 1)
+            comps = [
+                {"label": "상대강도(RS)", "basis": "지수 대비 60일 초과수익",
+                 "weightPct": 45, "maxPts": 45.0,
+                 "normScore": round(rs_n), "points": round(0.45 * rs_n, 1)},
+                {"label": "모멘텀(20일)", "basis": "최근 20거래일 수익률",
+                 "weightPct": 35, "maxPts": 35.0,
+                 "normScore": round(mom_n), "points": round(0.35 * mom_n, 1)},
+                {"label": "추세강도", "basis": "MA20/MA60 이격(상승 정렬 강도)",
+                 "weightPct": 20, "maxPts": 20.0,
+                 "normScore": round(tr_n), "points": round(0.20 * tr_n, 1)},
+            ]
+            reason = f"추세 정렬(MA20>60>200) · 지수대비 +{rs * 100:.1f}% · RSI {round(rsi)}"
+        # #반등 — 과매도 저평가 (별도 로직)
+        elif (ma60 and rsi <= 35 and price < ma60 and (not ma200 or price > ma200 * 0.80)):
+            sig = "반등"
+            depth = max(0.0, (35 - rsi) / 35)
+            below = min(max(0.0, -(price / ma60 - 1)) / 0.20, 1.0)
+            score = round((0.6 * depth + 0.4 * below) * 100, 1)
+            comps = [
+                {"label": "과매도(RSI)", "basis": "RSI(14) — 낮을수록 가점",
+                 "weightPct": 60, "maxPts": 60.0,
+                 "normScore": round(depth * 100), "points": round(0.6 * depth * 100, 1)},
+                {"label": "이평선 하회", "basis": "60일선 아래 낙폭(눌림 깊이)",
+                 "weightPct": 40, "maxPts": 40.0,
+                 "normScore": round(below * 100), "points": round(0.4 * below * 100, 1)},
+            ]
+            reason = f"과매도 반등 후보 · RSI {round(rsi)} · 60일선 {(price / ma60 - 1) * 100:.1f}%"
+        else:
+            return None
+
         return {
             "symbol": c["symbol"], "market": market, "name": c.get("name") or c["symbol"],
-            "price": c.get("price") or ind.get("price"), "changePct": c.get("changePct"),
-            "rsi": round(rsi) if rsi is not None else None,
-            "tags": tags,
-            "_entry": entry, "_trend": trend, "_value": value, "_sent": sent, "_int": interest,
-            "_limit": ind["limitLocked"],
+            "price": round(price, 2), "changePct": c.get("changePct"),
+            "rsi": round(rsi), "signalType": sig, "score": score,
+            "components": comps, "reason": reason,
         }
 
-    # 종목별 외부조회(일봉+뉴스)를 병렬로 — 순차 대비 수십초 → 수초
     rows = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
-        for r in ex.map(_process, universe):
+        for r in ex.map(_screen, universe):
             if r:
                 rows.append(r)
 
-    if not rows:
-        out = {"market": market, "marketTrend": round(market_trend, 2), "items": [],
-               "weights": [{"label": l, "weightPct": round(w * 100), "basis": b} for l, w, b in WSPEC],
-               "disclaimer": _DISCLAIMER}
-        _cache_set(ck, out)
-        return out
+    # 2단계: 통과 종목만 뉴스/테마 태그
+    def _enrich(r):
+        tags = []
+        try:
+            nitems = news_mod.get_stock_news(r["symbol"], market, r.get("name", ""), limit=5)
+            newstext = " ".join(((n.get("title") or "") + " " + (n.get("summary") or "")) for n in nitems)
+            tags = _theme_tags(newstext, r.get("name", ""))
+        except Exception:
+            tags = _theme_tags("", r.get("name", ""))
+        sig_tag = "#강세" if r["signalType"] == "강세" else "#반등"
+        r["tags"] = [sig_tag] + tags
+        return r
 
-    nEntry = _minmax([r["_entry"] for r in rows])
-    nTrend = _minmax([r["_trend"] for r in rows])
-    nValue = _minmax([r["_value"] for r in rows])
-    nSent = [(r["_sent"] + 1) / 2 * 100 for r in rows]
-    nInt = _minmax([r["_int"] for r in rows])
+    if rows:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            rows = list(ex.map(_enrich, rows))
 
-    for i, r in enumerate(rows):
-        norms = {"추세건전성": nTrend[i], "저평가": nValue[i], "진입여력": nEntry[i],
-                 "뉴스감성": nSent[i], "거래량·관심도": nInt[i], "시장추세": trend_norm}
-        comps, total = [], 0.0
-        for label, w, basis in WSPEC:
-            n = norms[label]
-            pts = w * n
-            total += pts
-            comps.append({"label": label, "weightPct": round(w * 100), "maxPts": round(w * 100, 1),
-                          "normScore": round(n), "points": round(pts, 1), "basis": basis})
-        r["score"] = round(total, 1)
-        r["components"] = comps
-        r["breakdown"] = {c["label"]: c["normScore"] for c in comps}
-        r["reason"] = _reason(r, norms)
-        for k in ("_entry", "_trend", "_value", "_sent", "_int", "_limit"):
-            r.pop(k, None)
+    strong = sorted([r for r in rows if r["signalType"] == "강세"], key=lambda x: x["score"], reverse=True)
+    rebound = sorted([r for r in rows if r["signalType"] == "반등"], key=lambda x: x["score"], reverse=True)
+    items = (strong + rebound)[:limit]
 
-    rows.sort(key=lambda x: x["score"], reverse=True)
-    out = {"market": market, "marketTrend": round(market_trend, 2),
-           "weights": [{"label": l, "weightPct": round(w * 100), "basis": b} for l, w, b in WSPEC],
-           "items": rows[:limit], "disclaimer": _DISCLAIMER}
+    out = {
+        "market": market, "marketTrend": round(market_trend, 2),
+        "weights": [
+            {"label": "강세(추세추종)", "weightPct": 0,
+             "basis": "MA20>60>200 · 모멘텀+ · 지수대비 강세 · RSI<=70 (백테스트 종목필터 정합)"},
+            {"label": "반등(과매도)", "weightPct": 0,
+             "basis": "RSI<=35 · 60일선 하회 · 구조 유지(MA200*0.8 위)"},
+        ],
+        "items": items, "disclaimer": _DISCLAIMER,
+        "strongCount": len(strong), "reboundCount": len(rebound),
+    }
     _cache_set(ck, out)
     return out
 
