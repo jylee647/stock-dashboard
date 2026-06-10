@@ -46,7 +46,9 @@ _BE_TRIGGER_MULT = 1.0  # +1.0xband 도달 시 SL을 진입가(BE)로 이동
 def _universe(market: str) -> Dict[str, str]:
     if market == "US":
         return {s: s for s in providers.US_FALLBACK}
-    return {f"{code}{suf}": name for code, (name, suf) in providers.KR_FALLBACK.items()}
+    # KR_WATCHLIST(불변 원본) 사용 — KR_FALLBACK은 런타임에 당일 무버가 추가되어
+    # 백테스트 유니버스가 호출 이력에 따라 달라지는 문제(재현 불가) 방지
+    return {f"{code}{suf}": name for code, (name, suf) in providers.KR_WATCHLIST.items()}
 
 
 def _rsi(close: pd.Series, n: int = 14) -> pd.Series:
@@ -97,6 +99,10 @@ def run_backtest(market: str, months: int = 24, hold: int = 42, top: int = 10) -
         "holdLabel": _HOLD_LABEL.get(hold, f"{hold}거래일"),
         "validation": validation,
         "picks": picks,
+        "validationNote": (
+            "적중률·초과수익 통계는 #강세 규칙(시장국면 게이트 포함)만 검증한 값입니다. "
+            "#반등 추천은 백테스트 미검증 참고 시그널입니다."
+        ),
         "honestNote": (
             "‘승률’은 예측 실력이 아니라 ‘상승장 국면에서만 진입 + 추세·품질 선별 + 손절 규칙’이 "
             "결합된 결과입니다(상승장 조건부). 단기 방향 자체는 예측하기 어렵습니다. 실제 판단 기준은 "
@@ -164,7 +170,9 @@ def _validate(market: str, months: int, hold: int, top: int) -> Dict:
     if len(dates) <= warm + hold + 1:
         return {"error": "기간이 짧습니다. 개월 수를 늘려보세요."}
 
-    rebal = list(range(warm, len(dates) - hold, hold))
+    # 검증창을 요청 개월수에 맞춤: warm(200일) 이후 전체가 아니라 최근 months×21거래일만 검증
+    start = max(warm, len(dates) - hold - months * 21)
+    rebal = list(range(start, len(dates) - hold, hold))
     pick_rets: List[float] = []
     bench_rets: List[float] = []
     equity = 1.0
@@ -342,5 +350,7 @@ def _today_picks(market: str, hold: int, top: int) -> List[Dict]:
             "target": target, "stop": stop,
             "targetPct": round(_TP_MULT * move * 100, 1), "stopPct": round(_SL_MULT * move * 100, 1),
             "holdLabel": _HOLD_LABEL.get(hold, f"{hold}거래일"),
+            "validated": r.get("validated", False),
+            "signalType": r.get("signalType"),
         })
-   
+    return out

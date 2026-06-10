@@ -137,9 +137,9 @@ def _build_universe(market: str, per: int = 12) -> List[Dict]:
         rows = _kr_universe_pykrx(per)
         for r in rows:
             add(r["symbol"], "KR", r["name"], r["price"], r["changePct"], r["volume"], r["yahooSym"])
-        if not out:
-            for code, (name, suffix) in providers.KR_FALLBACK.items():
-                add(code, "KR", name, None, None, None, f"{code}{suffix}")
+        # 관심종목(불변 원본)은 pykrx 결과와 무관하게 항상 후보에 합류 (add가 중복 제거)
+        for code, (name, suffix) in providers.KR_WATCHLIST.items():
+            add(code, "KR", name, None, None, None, f"{code}{suffix}")
     return out
 
 
@@ -202,6 +202,9 @@ WSPEC = [
 
 _BENCH_SYM = {"KR": "^KS11", "US": "^GSPC"}
 
+# 강세 점수 원시식의 이론 최대치 (0.45*0.6 + 0.35*0.5 + 0.20*0.3) — 0~100 표시 환산용
+_RAW_MAX = 0.505
+
 
 def _bench_ret60(market: str) -> float:
     """지수(^KS11/^GSPC)의 60거래일 수익률 — 상대강도(RS) 기준."""
@@ -247,17 +250,18 @@ def recommend(market: str, limit: int = 10) -> Dict:
         closes = daily["close"]
         if len(closes) < 60:
             return None
-        price = c.get("price") or closes[-1]
-        if not price:
+        live_price = c.get("price") or closes[-1]
+        px = closes[-1]  # 게이트·점수는 지표와 동일한 종가 기준으로 통일 (표시가격은 live_price)
+        if not (live_price and px):
             return None
         ma20 = signals._ma(closes, 20)
         ma60 = signals._ma(closes, 60)
         ma200 = signals._ma(closes, 200)
         rsi = signals._rsi(closes, 14)
         rsi = rsi if rsi is not None else 50.0
-        mom20 = (closes[-1] / closes[-21] - 1) if (len(closes) >= 21 and closes[-21]) else 0.0
-        ret60 = (closes[-1] / closes[-61] - 1) if (len(closes) >= 61 and closes[-61]) else 0.0
-        a20 = (price / ma20 - 1) if ma20 else 0.0
+        mom20 = (px / closes[-21] - 1) if (len(closes) >= 21 and closes[-21]) else 0.0
+        ret60 = (px / closes[-61] - 1) if (len(closes) >= 61 and closes[-61]) else 0.0
+        a20 = (px / ma20 - 1) if ma20 else 0.0
         rs = ret60 - bench_ret60
 
         sig = None
@@ -265,31 +269,39 @@ def recommend(market: str, limit: int = 10) -> Dict:
         comps = []
         reason = ""
         # #강세 — 백테스트 종목필터와 동일 (시장국면 게이트 제외)
-        if (ma20 and ma60 and ma200 and price > ma20 > ma60 > ma200
+        if (ma20 and ma60 and ma200 and px > ma20 > ma60 > ma200
                 and mom20 > 0 and a20 <= 0.25 and rsi <= 70 and rs > 0):
             sig = "강세"
             trend_str = ma20 / ma60 - 1
-            rs_n = min(max(rs, 0.0), 0.6) / 0.6 * 100
-            mom_n = min(max(mom20, 0.0), 0.5) / 0.5 * 100
-            tr_n = min(max(trend_str, 0.0), 0.3) / 0.3 * 100
-            score = round(0.45 * rs_n + 0.35 * mom_n + 0.20 * tr_n, 1)
+            # 백테스트 _validate 후보 점수와 동일한 원시식 (과열 페널티 포함) → 0~100 환산
+            rs_pt = 0.45 * min(rs, 0.6)
+            mom_pt = 0.35 * min(mom20, 0.5)
+            tr_pt = 0.20 * min(max(trend_str, 0.0), 0.3)
+            pen_pt = 0.3 * max(0.0, a20 - 0.15)
+            raw = rs_pt + mom_pt + tr_pt - pen_pt
+            score = round(max(raw, 0.0) / _RAW_MAX * 100, 1)
             comps = [
                 {"label": "상대강도(RS)", "basis": "지수 대비 60일 초과수익",
-                 "weightPct": 45, "maxPts": 45.0,
-                 "normScore": round(rs_n), "points": round(0.45 * rs_n, 1)},
+                 "weightPct": 53, "maxPts": 53.5,
+                 "normScore": round(min(rs, 0.6) / 0.6 * 100), "points": round(rs_pt / _RAW_MAX * 100, 1)},
                 {"label": "모멘텀(20일)", "basis": "최근 20거래일 수익률",
-                 "weightPct": 35, "maxPts": 35.0,
-                 "normScore": round(mom_n), "points": round(0.35 * mom_n, 1)},
+                 "weightPct": 35, "maxPts": 34.7,
+                 "normScore": round(min(mom20, 0.5) / 0.5 * 100), "points": round(mom_pt / _RAW_MAX * 100, 1)},
                 {"label": "추세강도", "basis": "MA20/MA60 이격(상승 정렬 강도)",
-                 "weightPct": 20, "maxPts": 20.0,
-                 "normScore": round(tr_n), "points": round(0.20 * tr_n, 1)},
+                 "weightPct": 12, "maxPts": 11.9,
+                 "normScore": round(min(max(trend_str, 0.0), 0.3) / 0.3 * 100), "points": round(tr_pt / _RAW_MAX * 100, 1)},
             ]
+            if pen_pt > 0:
+                comps.append(
+                    {"label": "과열 페널티", "basis": "20일선 이격 15% 초과분 감점",
+                     "weightPct": 0, "maxPts": 0.0,
+                     "normScore": 0, "points": round(-pen_pt / _RAW_MAX * 100, 1)})
             reason = f"추세 정렬(MA20>60>200) · 지수대비 +{rs * 100:.1f}% · RSI {round(rsi)}"
-        # #반등 — 과매도 저평가 (별도 로직)
-        elif (ma60 and rsi <= 35 and price < ma60 and (not ma200 or price > ma200 * 0.80)):
+        # #반등 — 과매도 저평가 (별도 로직, 백테스트 미검증 참고 시그널)
+        elif (ma60 and rsi <= 35 and px < ma60 and (not ma200 or px > ma200 * 0.80)):
             sig = "반등"
             depth = max(0.0, (35 - rsi) / 35)
-            below = min(max(0.0, -(price / ma60 - 1)) / 0.20, 1.0)
+            below = min(max(0.0, -(px / ma60 - 1)) / 0.20, 1.0)
             score = round((0.6 * depth + 0.4 * below) * 100, 1)
             comps = [
                 {"label": "과매도(RSI)", "basis": "RSI(14) — 낮을수록 가점",
@@ -299,15 +311,16 @@ def recommend(market: str, limit: int = 10) -> Dict:
                  "weightPct": 40, "maxPts": 40.0,
                  "normScore": round(below * 100), "points": round(0.4 * below * 100, 1)},
             ]
-            reason = f"과매도 반등 후보 · RSI {round(rsi)} · 60일선 {(price / ma60 - 1) * 100:.1f}%"
+            reason = f"과매도 반등 후보 · RSI {round(rsi)} · 60일선 {(px / ma60 - 1) * 100:.1f}%"
         else:
             return None
 
         return {
             "symbol": c["symbol"], "market": market, "name": c.get("name") or c["symbol"],
-            "price": round(price, 2), "changePct": c.get("changePct"),
+            "price": round(live_price, 2), "changePct": c.get("changePct"),
             "rsi": round(rsi), "signalType": sig, "score": score,
             "components": comps, "reason": reason,
+            "validated": sig == "강세",  # 백테스트로 검증된 규칙 여부
         }
 
     rows = []
@@ -347,6 +360,9 @@ def recommend(market: str, limit: int = 10) -> Dict:
         ],
         "items": items, "disclaimer": _DISCLAIMER,
         "strongCount": len(strong), "reboundCount": len(rebound),
+        "validationNote": (
+            "적중률 통계는 #강세 규칙 기준이며, #반등은 백테스트 미검증 참고 시그널입니다."
+        ),
     }
     _cache_set(ck, out)
     return out
